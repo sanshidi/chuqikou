@@ -104,6 +104,10 @@
       drawStreak(lastStreak.x, lastStreak.y, clientX, clientY);
     }
     if (clientX != null) lastStreak = { x: clientX, y: clientY };
+    if (st.combo > 0 && st.combo % 10 === 0) {
+      V.spawnFloatingText(stage, "连破 x" + st.combo, 50, 28, { critical: true });
+      V.playTick();
+    }
     updateHud(st.combo);
 
     const prev = refillTimers.get(b);

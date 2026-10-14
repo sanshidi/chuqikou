@@ -213,5 +213,5 @@
   ball.addEventListener("pointerup", onUp);
   ball.addEventListener("pointercancel", onUp);
 
-  V.setHud(hud, "捏了 0 下 · 按住揉捏，松手弹回");
+  V.setHud(hud, "捏了 0 下 · 按住揉捏 · 松手弹回 · 捏爆有惊喜");
 })();

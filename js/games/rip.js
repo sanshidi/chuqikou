@@ -113,7 +113,7 @@
     spawnShards(1);
     const r = wrap.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
-    V.spawnFloatingText(stage, "撕烂！", r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
+    V.spawnFloatingText(stage, st.combo >= 3 ? "撕穿 x" + st.combo : "撕烂！", r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
       px: true,
       critical: true,
     });

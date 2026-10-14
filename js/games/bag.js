@@ -132,6 +132,7 @@
       V.createShockwave(stage, c.x - stage.getBoundingClientRect().left, c.y - stage.getBoundingClientRect().top);
       V.playBurst();
       V.vibeHit("burst");
+      V.spawnFloatingText(stage, "连击达 " + st.combo + "！", 50, 18, { critical: true });
       arena.classList.add("combo-flash");
       setTimeout(() => arena.classList.remove("combo-flash"), 220);
     }

@@ -119,7 +119,7 @@
     const sr = stage.getBoundingClientRect();
     const fx = r.left + r.width / 2 - sr.left + (Math.random() * 30 - 15);
     const fy = r.top - sr.top + 20;
-    V.spawnFloatingText(stage, calm ? "心安" : "功德 +1", fx, fy, { px: true, calm: true });
+    V.spawnFloatingText(stage, calm ? "心安" : (streak >= 8 ? "稳了 · 功德 +1" : "功德 +1"), fx, fy, { px: true, calm: true });
     // crisp float pop — tiny soft pulse, no rage shake
     if (!reduced) {
       V.createParticleBurst(stage, fx, fy + 30, {

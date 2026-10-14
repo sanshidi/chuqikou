@@ -118,7 +118,7 @@
       V.screenShake(stage, 1.1, 2);
       V.hitStop(10);
       V.impactFlash(stage, {});
-      V.spawnFloatingText(stage, "裂纹!", p.x, p.y, { px: true });
+      V.spawnFloatingText(stage, "裂纹！", p.x, p.y, { px: true });
       const dustN = (V.getJuiceQuality && V.getJuiceQuality() <= 1) ? 4 : 8;
       for (let i = 0; i < dustN; i++) {
         const ang = rand(0, Math.PI * 2);
@@ -149,8 +149,10 @@
     }
     camPunch = p.boss ? 14 : 7 + Math.min(6, st.combo * 0.5);
     V.screenShake(stage, p.boss ? 2.6 : 1.2 + Math.min(1.2, st.combo / 8), st.combo);
-    const label = p.boss ? "大盘粉碎 +" + (24 + st.combo) : "+" + (6 + Math.min(18, st.combo));
-    V.spawnFloatingText(stage, label, p.x, p.y, { px: true, critical: !!p.boss || st.combo >= 7 });
+    const label = p.boss ? "大盘粉碎 +" + (24 + st.combo) : (st.combo >= 5 ? "连击 x" + st.combo : "+" + (6 + Math.min(18, st.combo)));
+    if (p.boss || st.combo >= 2 || Math.random() > 0.35) {
+      V.spawnFloatingText(stage, label, p.x, p.y, { px: true, critical: !!p.boss || st.combo >= 7 });
+    }
     V.createParticleBurst(stage, p.x, p.y, {
       count: p.boss ? 12 : 6,
       big: true,
@@ -294,6 +296,9 @@
   for (let i = 0; i < 6; i++) plates.push(spawnPlate(false));
   plates.push(spawnPlate(true));
   V.setHud(hud, "砸碎 0 · 瞄准飞盘猛砸");
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && !raf) raf = requestAnimationFrame(loop);
+  });
   raf = requestAnimationFrame(loop);
   canvas.addEventListener("pointerdown", onPointer, { passive: false });
   window.addEventListener("resize", resize);

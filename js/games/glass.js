@@ -112,7 +112,7 @@
     const st = V.recordHit("glass", { vibrateMs: 0, comboWindowMs: 800 });
     const power = 0.8 + Math.min(1.4, st.combo * 0.12);
     addCrack(x, y, power);
-    spawnShards(x, y, 10 + (st.combo >= 5 ? 10 : 0), st.combo);
+    spawnShards(x, y, 6 + (st.combo >= 5 ? 4 : 0), st.combo);
 
     V.playCrack(st.combo >= 6 || hits % 8 === 0);
     V.playThud(0.7 + Math.min(1.2, st.combo * 0.1));
@@ -120,10 +120,12 @@
     V.screenShake(stage, 1.0 + Math.min(1.5, st.combo / 7), st.combo);
     V.hitStop(st.combo >= 5 ? 12 : 8);
     V.impactFlash(stage, { heavy: st.combo >= 7, chromatic: st.combo >= 8 });
-    V.spawnFloatingText(stage, st.combo >= 6 ? "粉碎 +" + st.combo : "咔 +" + (4 + st.combo), x, y, {
-      px: true,
-      critical: st.combo >= 7,
-    });
+    if (st.combo >= 3 || hits % 2 === 0) {
+      V.spawnFloatingText(stage, st.combo >= 6 ? "粉碎 +" + st.combo : "咔 +" + (4 + st.combo), x, y, {
+        px: true,
+        critical: st.combo >= 7,
+      });
+    }
     V.createParticleBurst(stage, x, y, {
       count: 5 + Math.min(4, st.combo),
       dist: 50 + st.combo * 4,

@@ -32,7 +32,7 @@
   const crack = document.getElementById("rageCrack");
 
   function updateHud() {
-    V.setHud(hud, "怒气 " + Math.floor(meter) + "% · 爆发 " + bursts + " · 峰值 " + peakRate + "/秒");
+    V.setHud(hud, "怒气 " + Math.floor(meter) + "% · 宣泄 " + bursts + " 次 · 峰值 " + peakRate + "/秒");
   }
   updateHud();
 

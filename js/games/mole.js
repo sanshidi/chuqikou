@@ -101,7 +101,7 @@
       V.screenShake(stage, 1.2, 3);
       V.hitStop(8);
       V.impactFlash(stage, {});
-      V.spawnFloatingText(stage, "还没倒!", lx, ly, { px: true });
+      V.spawnFloatingText(stage, "还没倒！", lx, ly, { px: true });
       return;
     }
 
@@ -126,7 +126,7 @@
       V.hitStop(st.combo >= 6 ? 12 : 8);
       V.impactFlash(stage, { heavy: st.combo >= 6 });
     }
-    V.spawnFloatingText(stage, isBoss ? "BOSS KO +" + (20 + st.combo) : "砸！" + (st.combo > 1 ? " x" + st.combo : ""), lx, ly, {
+    V.spawnFloatingText(stage, isBoss ? "头目击倒 +" + (20 + st.combo) : (st.combo >= 5 ? "连砸 x" + st.combo : "砸！"), lx, ly, {
       px: true,
       critical: isBoss || st.combo >= 7,
     });
