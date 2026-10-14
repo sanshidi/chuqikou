@@ -143,7 +143,7 @@
     recordHit,
     getGameStats,
     setStat(text) {
-      gameStat.textContent = text || "";
+      if (gameStat) gameStat.textContent = text || "";
     },
     offerCalm() {
       showOfferBreathe();
@@ -669,82 +669,8 @@
     breatheSection.hidden = true;
   });
 
-  /* —— Game hub —— */
-  const META = {
-    bag: { title: "出气袋", hint: "连点出气，把劲儿打出去。" },
-    bubble: { title: "泡泡膜", hint: "一格格戳破。全破完可以再来一局。" },
-    plates: { title: "砸盘子", hint: "点盘子就碎，碎片会飞开。" },
-    rage: { title: "键盘宣泄", hint: "狂按键盘或猛点屏幕，填满怒气条再释放。" },
-    squeeze: { title: "捏压力球", hint: "按住捏扁，松开弹回。多捏几下。" },
-    muyu: { title: "敲木鱼", hint: "点一下听一声。不用赶，跟着自己的节奏。" },
-  };
-
-  function closeGame() {
-    if (typeof activeCleanup === "function") {
-      try {
-        activeCleanup();
-      } catch (_) {}
-    }
-    activeCleanup = null;
-    activeGameId = null;
-    gameStage.innerHTML = "";
-    gameStat.textContent = "";
-    gameModal.hidden = true;
-    document.body.style.overflow = "";
-  }
-
-  function openGame(id) {
-    const meta = META[id];
-    const factory = window.VentGames[id];
-    if (!meta || typeof factory !== "function") return;
-    ensureAudio();
-    closeGame();
-    activeGameId = id;
-    gameTitle.textContent = meta.title;
-    gameHint.textContent = meta.hint;
-    gameModal.hidden = false;
-    document.body.style.overflow = "hidden";
-    activeCleanup = factory(gameStage, Vent) || null;
-    btnCloseGame.focus();
-  }
-
-  stallGrid.addEventListener("pointerdown", () => {
-    ensureAudio();
-  }, { passive: true });
-
-  stallGrid.addEventListener("click", (e) => {
-    const stall = e.target.closest(".stall");
-    if (!stall) return;
-    openGame(stall.dataset.game);
-  });
-
-  const gameSheet = gameModal.querySelector(".game-sheet");
-  if (gameSheet) {
-    gameSheet.addEventListener("click", (e) => e.stopPropagation());
-  }
-
-  btnCloseGame.addEventListener("click", () => {
-    closeGame();
-    showOfferBreathe();
-  });
-
-  btnResetGame.addEventListener("click", () => {
-    if (activeGameId) openGame(activeGameId);
-  });
-
-  gameModal.addEventListener("click", (e) => {
-    if (e.target === gameModal) {
-      closeGame();
-      showOfferBreathe();
-    }
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !gameModal.hidden) {
-      closeGame();
-      showOfferBreathe();
-    }
-  });
+  /* —— Game hub moved to full pages under games/ —— */
+  /* Stall links navigate away; modal/openGame removed. */
 
 
   /* —— Subtle crisis affordance —— */

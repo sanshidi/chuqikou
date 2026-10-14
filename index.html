@@ -233,43 +233,43 @@
     </section>
 
     <!-- Games secondary -->
-    <section class="arcade arcade-secondary" aria-label="出气小游戏">
+    <section class="arcade arcade-secondary" id="arcade" aria-label="出气小游戏">
       <div class="panel-sign">
         <span class="sign-glow cyan">夜市出气摊</span>
         <span class="sign-badge soft">旁路</span>
       </div>
-      <p class="arcade-hint">写完再玩也行。6 个摊位，纯本地。</p>
+      <p class="arcade-hint">点进独立页，全屏出气。6 个摊位，纯本地。</p>
       <div class="stall-grid" id="stallGrid">
-        <button type="button" class="stall" data-game="bag">
+        <a class="stall" href="games/bag.html">
           <span class="stall-icon" aria-hidden="true">🥊</span>
           <span class="stall-name">出气袋</span>
-          <span class="stall-desc">连点把劲儿打出去</span>
-        </button>
-        <button type="button" class="stall" data-game="bubble">
+          <span class="stall-desc">甩袋猛打，把劲儿砸出去</span>
+        </a>
+        <a class="stall" href="games/bubble.html">
           <span class="stall-icon" aria-hidden="true">🫧</span>
           <span class="stall-name">泡泡膜</span>
-          <span class="stall-desc">一格格戳破</span>
-        </button>
-        <button type="button" class="stall" data-game="plates">
+          <span class="stall-desc">拖指连戳，破完再鼓</span>
+        </a>
+        <a class="stall" href="games/plates.html">
           <span class="stall-icon" aria-hidden="true">🍽️</span>
           <span class="stall-name">砸盘子</span>
-          <span class="stall-desc">点一下就碎</span>
-        </button>
-        <button type="button" class="stall" data-game="rage">
+          <span class="stall-desc">瞄准飞盘，砸得粉碎</span>
+        </a>
+        <a class="stall" href="games/rage.html">
           <span class="stall-icon" aria-hidden="true">⌨️</span>
           <span class="stall-name">键盘宣泄</span>
-          <span class="stall-desc">狂按填满怒气条</span>
-        </button>
-        <button type="button" class="stall" data-game="squeeze">
+          <span class="stall-desc">狂按填满，一键爆发</span>
+        </a>
+        <a class="stall" href="games/squeeze.html">
           <span class="stall-icon" aria-hidden="true">🟡</span>
           <span class="stall-name">捏压力球</span>
-          <span class="stall-desc">按住捏扁再弹回</span>
-        </button>
-        <button type="button" class="stall" data-game="muyu">
+          <span class="stall-desc">按住揉扁，捏到爆浆</span>
+        </a>
+        <a class="stall" href="games/muyu.html">
           <span class="stall-icon" aria-hidden="true">🪵</span>
           <span class="stall-name">敲木鱼</span>
           <span class="stall-desc">一下一下，把心敲稳</span>
-        </button>
+        </a>
       </div>
     </section>
 
@@ -318,28 +318,8 @@
     </footer>
   </div>
 
-  <!-- Game modal -->
-  <div class="game-modal" id="gameModal" hidden>
-    <div class="game-sheet" role="dialog" aria-modal="true" aria-labelledby="gameTitle">
-      <div class="game-rail" aria-hidden="true"></div>
-      <header class="game-header">
-        <div class="game-heading">
-          <h2 id="gameTitle">游戏</h2>
-          <p class="game-hint" id="gameHint"></p>
-        </div>
-        <button type="button" class="close-chip" id="btnCloseGame" aria-label="关闭游戏">关</button>
-      </header>
-      <div class="game-stage" id="gameStage"></div>
-      <div class="game-toolbar">
-        <span class="game-stat" id="gameStat"></span>
-        <button type="button" class="neon-btn cyan" id="btnResetGame">再来一局</button>
-      </div>
-    </div>
-  </div>
-
   <script src="js/pitch.js"></script>
   <script src="js/app.js"></script>
-  <script src="js/games.js"></script>
   <script src="js/extras.js"></script>
   <script src="js/pool.js"></script>
   <script src="js/companion.js"></script>

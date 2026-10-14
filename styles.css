@@ -629,6 +629,13 @@ body {
   color: var(--muted);
 }
 
+/* Stall as link (full-page games) */
+a.stall {
+  text-decoration: none;
+  color: inherit;
+  -webkit-user-drag: none;
+}
+
 /* Breathing */
 .breathe-wrap {
   display: flex;
