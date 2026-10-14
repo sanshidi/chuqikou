@@ -1,5 +1,5 @@
 /* 出气口 — offline cache, local-only app shell */
-const CACHE = 'chuqikou-v2';
+const CACHE = 'chuqikou-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const ASSETS = [
   './js/app.js',
   './js/games.js',
   './js/pool.js',
+  './js/extras.js',
   './js/pitch.js',
   './manifest.webmanifest',
   './icon-192.png',

@@ -34,12 +34,20 @@
 
     function hit() {
       count++;
-      const st = vent.recordHit ? vent.recordHit("bag", { vibrateMs: 12 }) : { combo: count, bestCombo: best, hits: count };
+      const st = vent.recordHit ? vent.recordHit("bag", { vibrateMs: 18 }) : { combo: count, bestCombo: best, hits: count };
       vent.setStat("已打 " + count + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
-      vent.playThud(Math.min(1, 0.4 + (count % 5) * 0.12));
+      vent.playThud(Math.min(1.35, 0.55 + (count % 5) * 0.16));
+      if (st.combo >= 2) vent.playTick && vent.playTick();
       btn.classList.add("is-hit");
+      wrap.classList.remove("combo-flash");
+      void wrap.offsetWidth;
+      wrap.classList.add("is-shake");
+      if (st.combo >= 3) wrap.classList.add("combo-flash");
       face.textContent = faces[Math.min(faces.length - 1, Math.floor(count / 3) % faces.length)];
-      setTimeout(() => btn.classList.remove("is-hit"), 90);
+      setTimeout(() => {
+        btn.classList.remove("is-hit");
+        wrap.classList.remove("is-shake");
+      }, 120);
       if (count > 0 && count % 20 === 0) face.textContent = "😌";
     }
 
@@ -74,8 +82,12 @@
         if (b.classList.contains("popped")) return;
         b.classList.add("popped");
         popped++;
-        const st = vent.recordHit ? vent.recordHit("bubble", { vibrateMs: 8, comboWindowMs: 600 }) : null;
+        const st = vent.recordHit ? vent.recordHit("bubble", { vibrateMs: 11, comboWindowMs: 700 }) : null;
         vent.playPop();
+        if (st && st.combo >= 5) {
+          grid.classList.add("combo-flash");
+          setTimeout(() => grid.classList.remove("combo-flash"), 200);
+        }
         const comboBit = st ? " · 连击 " + st.combo : "";
         vent.setStat("戳破 " + popped + " / " + total + comboBit);
         if (popped >= total) vent.setStat("全破完了 · 最佳连击 " + ((st && st.bestCombo) || popped));
@@ -126,10 +138,15 @@
     function shatter(p, cx, cy) {
       p.alive = false;
       smashed++;
-      const st = vent.recordHit ? vent.recordHit("plates", { vibrateMs: 16 }) : null;
-      vent.setStat("砸碎 " + smashed + " 只" + (st ? " · 连击 " + st.combo : ""));
+      const st = vent.recordHit ? vent.recordHit("plates", { vibrateMs: 22 }) : null;
+      vent.setStat("砸碎 " + smashed + " 只" + (st ? " · 连击 " + st.combo + (st.combo >= 5 ? " 🔥" : "") : ""));
       vent.playCrack();
-      for (let i = 0; i < 14; i++) {
+      if (st && st.combo >= 3 && vent.playThud) vent.playThud(0.8);
+      stage.classList.remove("is-shake");
+      void stage.offsetWidth;
+      stage.classList.add("is-shake");
+      setTimeout(() => stage.classList.remove("is-shake"), 140);
+      for (let i = 0; i < 26; i++) {
         const ang = rand(0, Math.PI * 2);
         const sp = rand(2, 7);
         particles.push({

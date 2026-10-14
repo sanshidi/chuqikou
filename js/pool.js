@@ -134,7 +134,7 @@
   const MAX_REC_MS = 60000;
   const CANCEL_SLIDE_PX = 56;
 
-  let fuseMode = "day";
+  let fuseMode = "10";
   let voiceMode = "normal";
   let recording = false;
   let mediaRecorder = null;
@@ -188,12 +188,14 @@
   function fuseExplodeAt(now) {
     if (fuseMode === "10") return now + 10000;
     if (fuseMode === "20") return now + 20000;
+    if (fuseMode === "60") return now + 60000;
     return endOfTodayMs();
   }
 
   function fuseLabel() {
     if (fuseMode === "10") return "10 秒";
     if (fuseMode === "20") return "20 秒";
+    if (fuseMode === "60") return "60 秒";
     return "今天结束";
   }
 
@@ -778,11 +780,22 @@
 
     // WeChat-like: release = send into pool
     addBubble(blob, voiceMode);
+    if (window.VentJournal) {
+      VentJournal.addEntry({
+        ts: Date.now(),
+        mood: VentJournal.currentMood(),
+        tags: ["语音"],
+        note: "",
+        ritual: "voice",
+        source: "voice",
+      });
+      VentJournal.renderJournal();
+    }
     setStatus(
       (fromMax ? "满 60 秒了，已帮你丢进池。" : "已丢进池。") +
         "点泡泡听「" +
         voiceLabel(voiceMode) +
-        "」· 点「炸」丢掉。"
+        "」· 点「炸」丢掉。可一键清光。"
     );
   }
 
@@ -1277,7 +1290,7 @@
         setStatus("池子已经是空的。");
         return;
       }
-      if (!window.confirm("清空本机情绪池？录音泡泡会从这台设备删掉，且不可恢复。")) return;
+      if (!window.confirm("一键清光本机全部语音泡泡？说完就散——删除后不可恢复。")) return;
       const ids = [...bubbles.keys()];
       ids.forEach((id) => {
         const item = bubbles.get(id);
@@ -1295,7 +1308,7 @@
       pendingBlob = null;
       lastBlob = null;
       syncPendingButtons();
-      setStatus("本地池已清空。");
+      setStatus("语音已清光。本机不留录音。");
     });
   }
 

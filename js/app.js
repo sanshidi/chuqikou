@@ -25,6 +25,13 @@
   const offerBreathe = document.getElementById("offerBreathe");
   const btnOfferYes = document.getElementById("btnOfferYes");
   const btnOfferNo = document.getElementById("btnOfferNo");
+  const postVent = document.getElementById("postVent");
+  const ritualFlash = document.getElementById("ritualFlash");
+  const calmNote = document.getElementById("calmNote");
+  const triggerTags = document.getElementById("triggerTags");
+  const btnSaveJournal = document.getElementById("btnSaveJournal");
+  const btnPostBreathe = document.getElementById("btnPostBreathe");
+  const btnPostSkip = document.getElementById("btnPostSkip");
   const ventValve = document.getElementById("ventValve");
   const gameModal = document.getElementById("gameModal");
   const gameStage = document.getElementById("gameStage");
@@ -356,6 +363,20 @@
     syncDestroyButtons();
   }
 
+  let lastRitual = "shred";
+
+  function flashRitual(kind) {
+    if (!ritualFlash || reducedMotion) return;
+    ritualFlash.hidden = false;
+    ritualFlash.className = "ritual-flash is-" + kind;
+    ritualFlash.setAttribute("aria-hidden", "false");
+    setTimeout(() => {
+      ritualFlash.hidden = true;
+      ritualFlash.className = "ritual-flash";
+      ritualFlash.setAttribute("aria-hidden", "true");
+    }, 900);
+  }
+
   function afterDestroy() {
     destroying = false;
     textareaWrap.classList.remove(
@@ -370,7 +391,45 @@
       shredOverlay.className = "shred-overlay";
     }
     clearVentText();
-    showOfferBreathe();
+    showPostVent();
+  }
+
+  function selectedTags() {
+    if (!triggerTags) return [];
+    return [...triggerTags.querySelectorAll(".chip.is-on")].map((c) => c.getAttribute("data-tag"));
+  }
+
+  function showPostVent() {
+    hideOffer();
+    if (postVent) {
+      postVent.hidden = false;
+      postVent.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+    } else {
+      showOfferBreathe();
+    }
+  }
+
+  function hidePostVent() {
+    if (postVent) postVent.hidden = true;
+  }
+
+  function saveJournalEntry(extra) {
+    if (!window.VentJournal) return;
+    const mood = VentJournal.currentMood();
+    VentJournal.addEntry({
+      ts: Date.now(),
+      mood: mood,
+      tags: selectedTags(),
+      note: (calmNote && calmNote.value.trim()) || "",
+      ritual: lastRitual,
+      source: (extra && extra.source) || "write",
+    });
+    if (calmNote) calmNote.value = "";
+    triggerTags && triggerTags.querySelectorAll(".chip.is-on").forEach((c) => {
+      c.classList.remove("is-on");
+      c.setAttribute("aria-pressed", "false");
+    });
+    VentJournal.renderJournal();
   }
 
   function spawnDestroyParticles(kind) {
@@ -393,8 +452,10 @@
   function runShred() {
     if (destroying || !ventText.value.trim()) return;
     destroying = true;
+    lastRitual = "shred";
     syncDestroyButtons();
     ensureAudio();
+    flashRitual("shred");
     playCrack();
     vibrate(18);
     spawnDestroyParticles("shred");
@@ -405,8 +466,10 @@
   function runVoid() {
     if (destroying || !ventText.value.trim()) return;
     destroying = true;
+    lastRitual = "void";
     syncDestroyButtons();
     ensureAudio();
+    flashRitual("void");
     playWhoosh();
     vibrate(14);
     spawnDestroyParticles("void");
@@ -417,8 +480,10 @@
   function runBalloon() {
     if (destroying || !ventText.value.trim()) return;
     destroying = true;
+    lastRitual = "balloon";
     syncDestroyButtons();
     ensureAudio();
+    flashRitual("balloon");
     playWhoosh();
     vibrate(12);
     textareaWrap.classList.add("is-ballooning");
@@ -439,8 +504,10 @@
   function runBurn() {
     if (destroying || !ventText.value.trim()) return;
     destroying = true;
+    lastRitual = "burn";
     syncDestroyButtons();
     ensureAudio();
+    flashRitual("burn");
     playCrack();
     playWhoosh();
     vibrate(22);
@@ -452,8 +519,10 @@
   function runShatter() {
     if (destroying || !ventText.value.trim()) return;
     destroying = true;
+    lastRitual = "shatter";
     syncDestroyButtons();
     ensureAudio();
+    flashRitual("shatter");
     playCrack();
     vibrate([10, 30, 18]);
     spawnDestroyParticles("shatter");
@@ -486,12 +555,14 @@
     breatheText.textContent = "准备";
   }
 
-  function startBreathe() {
+  function startBreathe(seconds) {
+    const dur = (seconds || 60) * 1000;
     hideOffer();
+    hidePostVent();
     breatheSection.hidden = false;
     breatheSection.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
     stopBreathe();
-    breatheHint.textContent = "跟着光圈：吸气 4 秒…停 2 秒…呼气 4 秒…";
+    breatheHint.textContent = "跟着光圈：吸气 4 秒…停 2 秒…呼气 4 秒…（约 " + (seconds || 60) + " 秒）";
     let phase = 0;
     const cycle = () => {
       breatheCircle.classList.remove("inhale", "exhale");
@@ -512,12 +583,42 @@
       stopBreathe();
       breatheText.textContent = "好了";
       breatheHint.textContent = "缓过来一点就行。需要再来可以再点开始。";
-    }, 45000);
+    }, dur);
   }
+  Vent.startBreathe = startBreathe;
 
-  btnOfferYes.addEventListener("click", startBreathe);
+  btnOfferYes.addEventListener("click", () => startBreathe(60));
   btnOfferNo.addEventListener("click", hideOffer);
-  btnBreatheStart.addEventListener("click", startBreathe);
+  btnBreatheStart.addEventListener("click", () => startBreathe(60));
+
+  if (triggerTags) {
+    triggerTags.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      chip.classList.toggle("is-on");
+      chip.setAttribute("aria-pressed", chip.classList.contains("is-on") ? "true" : "false");
+    });
+  }
+  if (btnSaveJournal) {
+    btnSaveJournal.addEventListener("click", () => {
+      saveJournalEntry({ source: "write" });
+      hidePostVent();
+      showOfferBreathe();
+    });
+  }
+  if (btnPostBreathe) {
+    btnPostBreathe.addEventListener("click", () => {
+      saveJournalEntry({ source: "write" });
+      hidePostVent();
+      startBreathe(60);
+    });
+  }
+  if (btnPostSkip) {
+    btnPostSkip.addEventListener("click", () => {
+      hidePostVent();
+      showOfferBreathe();
+    });
+  }
   btnBreatheSkip.addEventListener("click", () => {
     stopBreathe();
     breatheSection.hidden = true;

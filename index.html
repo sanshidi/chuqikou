@@ -20,70 +20,115 @@
 
   <div class="app">
     <header class="hero">
-      <p class="hero-kicker">雨夜巷口 · 本地减压站</p>
+      <p class="hero-kicker">雨夜巷口 · 本地减压 · 不上云</p>
       <h1 class="logo">出气口</h1>
-      <p class="tagline">堵着就来这儿泄一泄。写的只在本机，玩完可以缓一缓。</p>
-
+      <p class="tagline">先写下来，再亲手毁掉——这是主线。语音与小游戏是旁路。</p>
+      <nav class="hero-jump" aria-label="快捷跳转">
+        <a href="#ritual">去写下</a>
+        <a href="#emotionPool">语音泄</a>
+        <a href="#calmKit">静一静</a>
+      </nav>
       <button type="button" class="vent-valve" id="ventValve" aria-label="点一下，放一股蒸汽">
         <span class="valve-ring"></span>
-        <span class="valve-core" id="valveCore">
-          <span class="valve-label">泄压</span>
-        </span>
+        <span class="valve-core" id="valveCore"><span class="valve-label">泄压</span></span>
         <span class="valve-steam" id="valveSteam"></span>
       </button>
-
-      <section class="mood-bar" aria-label="情绪强度">
-        <label for="mood" class="mood-label">
-          此刻堵得有多满 <strong id="moodValue">5</strong>
-        </label>
-        <input type="range" id="mood" min="0" max="10" value="5" class="mood-slider" />
-        <div class="mood-ends"><span>还行</span><span>快炸了</span></div>
-      </section>
     </header>
 
-    <!-- Write & destroy ritual -->
-    <section class="panel ritual" aria-label="写下情绪">
+    <!-- P0 PRIMARY: Write → ritual → dissolve -->
+    <section class="panel ritual ritual-primary" id="ritual" aria-label="写下情绪">
       <div class="panel-sign">
         <span class="sign-glow">写完就散</span>
+        <span class="sign-badge">主线</span>
       </div>
+      <p class="ritual-lead">把堵着的话倒出来，然后选一种方式亲手毁掉。字不会上传，仪式结束后可记一笔「触发」与平静小记（不含原文）。</p>
+
+      <div class="prompt-row" id="promptRow" aria-label="话题卡片">
+        <button type="button" class="prompt-chip" data-prompt="今天最想对谁说却没说出口的是……">没说出口</button>
+        <button type="button" class="prompt-chip" data-prompt="如果可以重来十分钟，我想改的是……">重来十分钟</button>
+        <button type="button" class="prompt-chip" data-prompt="我现在身体里最紧的地方在……它好像在说……">身体紧绷</button>
+        <button type="button" class="prompt-chip" data-prompt="其实我真正害怕的不是事情本身，而是……">真正害怕</button>
+        <button type="button" class="prompt-chip" data-prompt="我想对「今天的自己」骂一句，然后抱抱：……">骂完抱抱</button>
+        <button type="button" class="prompt-chip" data-prompt="换一张牌">换一张</button>
+      </div>
+
       <label for="ventText" class="sr-only">写下想发泄的话</label>
       <div class="textarea-wrap" id="textareaWrap">
-        <textarea
-          id="ventText"
-          rows="4"
-          maxlength="2000"
-          placeholder="想骂的、堵着的、说不出口的……写在这儿。不会上传，刷新就没了。"
-          autocomplete="off"
-          spellcheck="false"
-        ></textarea>
+        <textarea id="ventText" rows="6" maxlength="2000"
+          placeholder="想骂的、堵着的、说不出口的……写在这儿。选下方仪式毁掉它。不上传，仪式后原文清空。"
+          autocomplete="off" spellcheck="false"></textarea>
         <div class="shred-overlay" id="shredOverlay" aria-hidden="true"></div>
       </div>
-      <p class="privacy-note" role="note">内容只留在本机浏览器，刷新即清空；不上传服务器。</p>
-      <div class="destroy-actions">
-        <button type="button" class="neon-btn magenta" id="btnShred" disabled>撕碎</button>
-        <button type="button" class="neon-btn violet" id="btnVoid" disabled>吸入虚空</button>
-        <button type="button" class="neon-btn cyan" id="btnBalloon" disabled>气球放飞</button>
-        <button type="button" class="neon-btn magenta" id="btnBurn" disabled>烧掉</button>
-        <button type="button" class="neon-btn violet" id="btnShatter" disabled>摔碎</button>
+      <p class="privacy-note" role="note">原文只在本机，仪式后立即清空；不会上传服务器。</p>
+
+      <p class="ritual-pick-label">选一种毁掉方式</p>
+      <div class="destroy-actions destroy-actions-primary">
+        <button type="button" class="neon-btn magenta ritual-cta" id="btnShred" disabled>撕碎</button>
+        <button type="button" class="neon-btn violet ritual-cta" id="btnVoid" disabled>吸入虚空</button>
+        <button type="button" class="neon-btn cyan ritual-cta" id="btnBalloon" disabled>气球放飞</button>
+        <button type="button" class="neon-btn magenta ritual-cta" id="btnBurn" disabled>烧掉</button>
+        <button type="button" class="neon-btn violet ritual-cta" id="btnShatter" disabled>摔碎</button>
       </div>
     </section>
 
+    <!-- Full-screen ritual flash layer -->
+    <div class="ritual-flash" id="ritualFlash" hidden aria-hidden="true"></div>
     <div class="balloon-layer" id="balloonLayer" aria-hidden="true"></div>
 
-    <!-- Emotion pool -->
-    <section class="panel emotion-pool" id="emotionPool" aria-label="情绪池">
-      <div class="panel-sign">
-        <span class="sign-glow">情绪池</span>
+    <!-- Post-vent: trigger tags + calm note -->
+    <section class="panel post-vent" id="postVent" hidden aria-label="发泄之后">
+      <div class="panel-sign"><span class="sign-glow cyan">散掉之后</span></div>
+      <p class="pool-lead">原文已毁。若愿意，给这次堵点一个名字，并留下一句平静小记（可选，只存本地）。</p>
+      <p class="pool-label">触发源（可多选）</p>
+      <div class="chip-group" id="triggerTags" role="group" aria-label="触发源">
+        <button type="button" class="chip" data-tag="工作">工作</button>
+        <button type="button" class="chip" data-tag="家人">家人</button>
+        <button type="button" class="chip" data-tag="关系">关系</button>
+        <button type="button" class="chip" data-tag="自己">自己</button>
+        <button type="button" class="chip" data-tag="身体">身体</button>
+        <button type="button" class="chip" data-tag="金钱">金钱</button>
+        <button type="button" class="chip" data-tag="未来">未来</button>
+        <button type="button" class="chip" data-tag="其他">其他</button>
       </div>
-      <p class="pool-lead">按住说话，松手丢进池。泡泡会慢慢长大、往上飘。点泡泡听/暂停；点「炸」或等引信到点才炸掉。录音只在本机、可留在本地跨刷新；可一键清空。</p>
+      <label class="pool-label" for="calmNote">平静小记</label>
+      <textarea id="calmNote" class="calm-note" rows="2" maxlength="200" placeholder="一句就好，比如：说完轻松一点了。"></textarea>
+      <div class="post-vent-actions">
+        <button type="button" class="neon-btn cyan" id="btnSaveJournal">记下这次</button>
+        <button type="button" class="neon-btn magenta" id="btnPostBreathe">呼吸缓一缓</button>
+        <button type="button" class="ghost-btn" id="btnPostSkip">跳过</button>
+      </div>
+    </section>
+
+    <!-- Mood journal + trend -->
+    <section class="panel mood-journal" id="moodJournal" aria-label="心情日记">
+      <div class="panel-sign"><span class="sign-glow cyan">心情轨迹</span></div>
+      <div class="mood-bar mood-bar-inline" aria-label="情绪强度">
+        <label for="mood" class="mood-label">此刻强度 <strong id="moodValue">5</strong></label>
+        <input type="range" id="mood" min="0" max="10" value="5" class="mood-slider" />
+        <div class="mood-ends"><span>还行</span><span>快炸了</span></div>
+      </div>
+      <canvas class="mood-chart" id="moodChart" width="400" height="90" aria-label="强度趋势图"></canvas>
+      <p class="mood-chart-hint" id="moodChartHint">本地记录，不上云。写下毁掉或语音发泄后可自动记一笔。</p>
+      <ul class="journal-list" id="journalList"></ul>
+      <button type="button" class="ghost-btn" id="btnClearJournal">清空心情日记</button>
+    </section>
+
+    <!-- Voice vent with short-lived safety -->
+    <section class="panel emotion-pool" id="emotionPool" aria-label="语音发泄">
+      <div class="panel-sign">
+        <span class="sign-glow">语音发泄</span>
+        <span class="sign-badge soft">短命 · 可清</span>
+      </div>
+      <p class="pool-lead">按住说话，松手进池。默认短引信，说完就散。点泡泡听/暂停；「炸」或引信到点炸掉。一键可清光本地语音。</p>
 
       <div class="pool-controls">
         <div class="pool-row">
           <span class="pool-label">引信</span>
           <div class="chip-group" role="group" aria-label="爆炸倒计时">
-            <button type="button" class="chip" data-fuse="10">10 秒</button>
+            <button type="button" class="chip is-on" data-fuse="10" aria-pressed="true">10 秒</button>
             <button type="button" class="chip" data-fuse="20">20 秒</button>
-            <button type="button" class="chip is-on" data-fuse="day" aria-pressed="true">今天结束</button>
+            <button type="button" class="chip" data-fuse="60">60 秒</button>
+            <button type="button" class="chip" data-fuse="day">今天结束</button>
           </div>
         </div>
         <div class="pool-row">
@@ -112,31 +157,51 @@
         <button type="button" class="wx-hold-btn" id="btnPoolRec" aria-label="按住说话">
           <span class="wx-hold-label" id="wxHoldLabel">按住 说话</span>
         </button>
-        <p class="wx-rec-hint">按住说话，松手丢进池 · 上滑取消 · 太短不发送</p>
+        <p class="wx-rec-hint">按住说话 · 松手进池 · 上滑取消 · 太短不发送</p>
       </div>
       <div class="pool-record-bar pool-after-rec">
         <button type="button" class="neon-btn cyan" id="btnPoolPreview" disabled>试听变声</button>
         <button type="button" class="neon-btn violet" id="btnPoolDrop" disabled>再丢一颗</button>
-        <button type="button" class="ghost-btn pool-wipe" id="btnPoolWipe">清空本地池</button>
+        <button type="button" class="neon-btn magenta pool-wipe-primary" id="btnPoolWipe">一键清光语音</button>
       </div>
-      <p class="pool-status" id="poolStatus" role="status">先选引信和搞笑变声，再按住说话。池空着就按住录一段吧。</p>
-      <p class="privacy-note" role="note">语音气泡只存在本机（IndexedDB）。可跨刷新保留；点「清空本地池」永久删除。不会上传。</p>
+      <p class="pool-status" id="poolStatus" role="status">默认 10 秒引信。说完就散；清光后本机不留录音。</p>
+      <p class="privacy-note" role="note">语音只在本机 IndexedDB。可跨刷新；点「一键清光语音」永久删除。不上云。</p>
 
       <div class="pool-tank" id="poolTank" aria-label="情绪泡泡池">
         <canvas class="pool-fx" id="poolFx" aria-hidden="true"></canvas>
         <div class="pool-bubbles" id="poolBubbles"></div>
         <p class="pool-empty" id="poolEmpty"><strong>池子还空着</strong><span>按住下方按钮说话，松手后泡泡会出现在这儿</span></p>
       </div>
-      <p class="pool-hint">近爆点 → 更大更高。点泡泡听 · 「炸」丢掉 · 引信到点自动炸。试听/再丢一颗可用上次录音。</p>
+      <p class="pool-hint">近爆点更大更高。点泡泡听 · 「炸」丢掉 · 引信到点自动炸。</p>
     </section>
 
-    <!-- Game arcade hub -->
-    <section class="arcade" aria-label="出气小游戏">
+    <!-- Calm kit -->
+    <section class="panel calm-kit" id="calmKit" aria-label="平静工具箱">
+      <div class="panel-sign"><span class="sign-glow cyan">静一静</span></div>
+      <p class="pool-lead">雨声、白噪、走走计时、一分钟呼吸——都在本机，不联网。</p>
+      <div class="calm-grid">
+        <button type="button" class="calm-tile" id="btnRain" aria-pressed="false">🌧️ 雨声</button>
+        <button type="button" class="calm-tile" id="btnNoise" aria-pressed="false">📻 白噪</button>
+        <button type="button" class="calm-tile" id="btnWalk5">🚶 走 5 分</button>
+        <button type="button" class="calm-tile" id="btnWalk10">🚶 走 10 分</button>
+        <button type="button" class="calm-tile" id="btnGuide60">🫁 60 秒引导</button>
+        <button type="button" class="calm-tile" id="btnStopCalm">停止声景</button>
+      </div>
+      <p class="calm-status" id="calmStatus" role="status">选一个开始。</p>
+      <div class="walk-bar" id="walkBar" hidden>
+        <div class="walk-fill" id="walkFill"></div>
+        <span id="walkLabel">0:00</span>
+      </div>
+    </section>
+
+    <!-- Games secondary -->
+    <section class="arcade arcade-secondary" aria-label="出气小游戏">
       <div class="panel-sign">
         <span class="sign-glow cyan">夜市出气摊</span>
+        <span class="sign-badge soft">旁路</span>
       </div>
-      <p class="arcade-hint">精选 6 个摊位 · 出气 / 解压 / 安静 · 纯本地</p>
-            <div class="stall-grid" id="stallGrid">
+      <p class="arcade-hint">写完再玩也行。6 个摊位，纯本地。</p>
+      <div class="stall-grid" id="stallGrid">
         <button type="button" class="stall" data-game="bag">
           <span class="stall-icon" aria-hidden="true">🥊</span>
           <span class="stall-name">出气袋</span>
@@ -170,7 +235,6 @@
       </div>
     </section>
 
-    <!-- Breathing -->
     <section class="panel breathe-section" id="breatheSection" aria-label="呼吸引导" hidden>
       <div class="panel-sign"><span class="sign-glow cyan">缓一缓</span></div>
       <p class="hint" id="breatheHint">跟着光圈：吸气…停…呼气…</p>
@@ -180,7 +244,7 @@
         </div>
       </div>
       <div class="breathe-actions">
-        <button type="button" class="neon-btn cyan" id="btnBreatheStart">开始 45 秒</button>
+        <button type="button" class="neon-btn cyan" id="btnBreatheStart">开始 60 秒</button>
         <button type="button" class="ghost-btn" id="btnBreatheSkip">收起来</button>
       </div>
     </section>
@@ -212,7 +276,7 @@
         （希望24热线）·
         <a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线</a>
       </p>
-      <p class="footer-meta">出气口 · 纯本地静态页 · 无账号 · 无上传</p>
+      <p class="footer-meta">出气口 · 纯本地 · 可安装 PWA · 无账号 · 无上传</p>
     </footer>
   </div>
 
@@ -238,6 +302,7 @@
   <script src="js/pitch.js"></script>
   <script src="js/app.js"></script>
   <script src="js/games.js"></script>
+  <script src="js/extras.js"></script>
   <script src="js/pool.js"></script>
 </body>
 </html>
