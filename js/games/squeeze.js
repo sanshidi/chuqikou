@@ -1,6 +1,5 @@
 /**
  * 捏压力球 — soft-body hold-deform + directional squash + 爆浆 at max
- * Interaction: hold to squash; pointer move shifts squash axis; release = elastic bounce
  */
 (function () {
   "use strict";
@@ -18,14 +17,10 @@
   let squeezes = 0;
   let colorIdx = 0;
   let pressing = false;
-  let sx = 1,
-    sy = 1;
-  let targetSx = 1,
-    targetSy = 1;
-  let offsetX = 0,
-    offsetY = 0;
-  let startX = 0,
-    startY = 0;
+  let sx = 1, sy = 1;
+  let targetSx = 1, targetSy = 1;
+  let offsetX = 0, offsetY = 0;
+  let startX = 0, startY = 0;
   let holdMs = 0;
   let lastTick = 0;
   let raf = 0;
@@ -65,21 +60,16 @@
   function render() {
     ball.style.transform =
       "translate(" + offsetX.toFixed(1) + "px," + offsetY.toFixed(1) + "px) scale(" + sx.toFixed(3) + "," + sy.toFixed(3) + ")";
-    const flat = (1.15 - sx) / 0.45; // 0..1-ish
-    shadow.style.transform = "scaleX(" + (1 + flat * 0.55).toFixed(2) + ")";
-    shadow.style.opacity = String(0.35 + flat * 0.4);
+    const flat = (1.15 - sx) / 0.45;
+    shadow.style.transform = "scaleX(" + (1 + flat * 0.7).toFixed(2) + ")";
+    shadow.style.opacity = String(0.35 + flat * 0.45);
   }
 
   function reform() {
     bursting = false;
     ball.classList.remove("is-burst", "is-tremble");
-    sx = 1;
-    sy = 1;
-    targetSx = 1;
-    targetSy = 1;
-    offsetX = 0;
-    offsetY = 0;
-    holdMs = 0;
+    sx = 1; sy = 1; targetSx = 1; targetSy = 1;
+    offsetX = 0; offsetY = 0; holdMs = 0;
     ball.style.opacity = "1";
     render();
     burstHint.textContent = "";
@@ -93,15 +83,19 @@
     ball.classList.add("is-burst");
     V.playBurst();
     V.playSplat();
-    V.vibrate([18, 30, 22]);
-    V.screenShake(stage, 1.8);
+    V.playCrack(false);
+    V.vibeHit("burst");
+    V.screenShake(stage, 2.4, 8);
+    V.hitStop(36);
+    V.impactFlash(stage, { heavy: true, chromatic: true });
     const r = ball.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
     V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-      count: 28,
-      dist: 90,
-      colors: ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8"],
+      count: 40,
+      dist: 120,
+      colors: ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8", "#fff"],
       star: true,
+      big: true,
     });
     V.spawnFloatingText(stage, "爆浆！", r.left + r.width / 2 - sr.left, r.top - sr.top, {
       px: true,
@@ -110,7 +104,7 @@
     squeezes++;
     const st = V.recordHit("squeeze", { vibrateMs: 0, comboWindowMs: 1400 });
     V.setHud(hud, "捏了 " + squeezes + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
-    setTimeout(reform, 480);
+    setTimeout(reform, 520);
   }
 
   let lastT = performance.now();
@@ -120,35 +114,33 @@
 
     if (pressing && !bursting) {
       holdMs += dt;
-      // continuous soft ticks while squeezing
-      if (t - lastTick > 90) {
+      if (t - lastTick > 80) {
         lastTick = t;
-        V.playKnead(0.35 + (1 - sx) * 0.7);
+        V.playKnead(0.4 + (1 - sx) * 0.85);
+        if (holdMs > 900) V.screenShake(stage, 0.25 + (1 - sx) * 0.5, 1);
       }
-      // approach max squash
-      targetSx = Math.max(0.55, targetSx - 0.012 * (dt / 16));
-      targetSy = Math.min(1.45, targetSy + 0.01 * (dt / 16));
-      if (holdMs > 1400) {
+      targetSx = Math.max(0.48, targetSx - 0.014 * (dt / 16));
+      targetSy = Math.min(1.55, targetSy + 0.012 * (dt / 16));
+      if (holdMs > 1200) {
         ball.classList.add("is-tremble");
         burstHint.textContent = "快爆了…再捏紧！";
       }
-      if (holdMs > 2200 || targetSx <= 0.56) {
+      if (holdMs > 2000 || targetSx <= 0.5) {
         doBurst();
       }
     } else if (!bursting) {
-      // elastic return with overshoot
-      targetSx += (1 - targetSx) * 0.22;
-      targetSy += (1 - targetSy) * 0.22;
-      offsetX *= 0.85;
-      offsetY *= 0.85;
+      targetSx += (1 - targetSx) * 0.24;
+      targetSy += (1 - targetSy) * 0.24;
+      offsetX *= 0.82;
+      offsetY *= 0.82;
       if (Math.abs(targetSx - 1) < 0.002) {
         targetSx = 1;
         targetSy = 1;
       }
     }
 
-    sx += (targetSx - sx) * 0.35;
-    sy += (targetSy - sy) * 0.35;
+    sx += (targetSx - sx) * 0.38;
+    sy += (targetSy - sy) * 0.38;
     render();
     raf = requestAnimationFrame(loop);
   }
@@ -163,10 +155,8 @@
     startX = e.clientX;
     startY = e.clientY;
     ball.classList.add("is-squeezing");
-    try {
-      ball.setPointerCapture(e.pointerId);
-    } catch (_) {}
-    V.playKnead(0.55);
+    try { ball.setPointerCapture(e.pointerId); } catch (_) {}
+    V.playKnead(0.65);
   }
 
   function onMove(e) {
@@ -174,12 +164,11 @@
     e.preventDefault();
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
-    // shift squash direction: horizontal drag → more scaleX bias
-    offsetX = Math.max(-28, Math.min(28, dx * 0.15));
-    offsetY = Math.max(-18, Math.min(18, dy * 0.12));
+    offsetX = Math.max(-36, Math.min(36, dx * 0.18));
+    offsetY = Math.max(-24, Math.min(24, dy * 0.14));
     const bias = Math.max(-1, Math.min(1, dx / 80));
-    targetSx = Math.max(0.55, Math.min(0.95, 0.78 - Math.abs(bias) * 0.08));
-    targetSy = Math.min(1.45, 1.12 + Math.abs(bias) * 0.12 + Math.abs(dy) / 400);
+    targetSx = Math.max(0.48, Math.min(0.92, 0.72 - Math.abs(bias) * 0.1));
+    targetSy = Math.min(1.55, 1.18 + Math.abs(bias) * 0.14 + Math.abs(dy) / 350);
   }
 
   function onUp(e) {
@@ -187,22 +176,26 @@
     pressing = false;
     ball.classList.remove("is-squeezing", "is-tremble");
     burstHint.textContent = "";
-    // overshoot bounce
     const depth = 1.15 - sx;
-    targetSx = 1 + depth * 0.55;
-    targetSy = 1 - depth * 0.4;
+    targetSx = 1 + depth * 0.7;
+    targetSy = 1 - depth * 0.5;
     squeezes++;
-    const st = V.recordHit("squeeze", { vibrateMs: 14, comboWindowMs: 1200 });
+    const st = V.recordHit("squeeze", { vibrateMs: 0, comboWindowMs: 1200 });
     V.playSplat();
-    V.playPop(0.9 + depth, 1.1);
+    V.playPop(0.85 + depth, 1.35);
+    V.vibeHit(depth > 0.35 ? "heavy" : "hit");
+    V.screenShake(stage, 0.7 + depth * 1.4, st.combo);
+    if (depth > 0.3) {
+      V.hitStop(20);
+      V.impactFlash(stage, {});
+    }
     V.createParticleBurst(
       stage,
       ball.getBoundingClientRect().left + ball.offsetWidth / 2 - stage.getBoundingClientRect().left,
       ball.getBoundingClientRect().top + ball.offsetHeight / 2 - stage.getBoundingClientRect().top,
-      { count: 10, dist: 36, colors: ["#ffe566", "#ff3d7f"] }
+      { count: 16, dist: 48 + depth * 40, big: true, colors: ["#ffe566", "#ff3d7f", "#fff"] }
     );
     V.setHud(hud, "捏了 " + squeezes + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
-    // settle overshoot
     setTimeout(() => {
       if (!pressing && !bursting) {
         targetSx = 1;

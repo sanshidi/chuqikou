@@ -32,6 +32,7 @@
   let lifetime = V.getGameStats("bubble").pops || 0;
   let sessionPops = 0;
   let dragging = false;
+  let lastStreak = null;
   const refillTimers = new WeakMap();
 
   function build() {
@@ -55,24 +56,56 @@
   }
   updateHud();
 
-  function popBubble(b, pitchScale) {
+  function drawStreak(x0, y0, x1, y1) {
+    if (V.reducedMotion()) return;
+    const sr = stage.getBoundingClientRect();
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 8) return;
+    const el = document.createElement("div");
+    el.className = "bubble-streak";
+    el.style.left = x0 - sr.left + "px";
+    el.style.top = y0 - sr.top - 5 + "px";
+    el.style.width = len + "px";
+    el.style.transform = "rotate(" + Math.atan2(dy, dx) + "rad)";
+    stage.appendChild(el);
+    setTimeout(() => {
+      try {
+        el.remove();
+      } catch (_) {}
+    }, 300);
+  }
+
+  function popBubble(b, pitchScale, clientX, clientY) {
     if (!b || b.classList.contains("popped")) return false;
     b.classList.add("popped");
     b.classList.remove("regrowing");
     sessionPops++;
     lifetime++;
-    const st = V.recordHit("bubble", { vibrateMs: 9, comboWindowMs: 650, extra: { pops: lifetime } });
+    const st = V.recordHit("bubble", { vibrateMs: 0, comboWindowMs: 650, extra: { pops: lifetime } });
     V.setGameStat("bubble", { pops: lifetime });
     const pitch = pitchScale != null ? pitchScale : 0.75 + Math.random() * 0.7;
-    const loud = dragging && st.combo >= 2 ? 1 + Math.min(1.1, st.combo * 0.08) : 1;
+    const loud = dragging && st.combo >= 2 ? 1.15 + Math.min(1.2, st.combo * 0.09) : 1.25;
     V.playPop(pitch, loud);
+    if (st.combo >= 3) V.vibeHit("tap");
+    else V.vibrate(10);
+    if (st.combo >= 8) {
+      V.screenShake(stage, 0.55, st.combo);
+      V.impactFlash(stage, {});
+    } else if (st.combo >= 4 && st.combo % 2 === 0) {
+      V.screenShake(stage, 0.35, Math.floor(st.combo / 2));
+    }
     if (st.combo >= 6) {
       grid.classList.add("combo-flash");
       setTimeout(() => grid.classList.remove("combo-flash"), 180);
     }
+    if (clientX != null && lastStreak) {
+      drawStreak(lastStreak.x, lastStreak.y, clientX, clientY);
+    }
+    if (clientX != null) lastStreak = { x: clientX, y: clientY };
     updateHud(st.combo);
 
-    // refill after delay
     const prev = refillTimers.get(b);
     if (prev) clearTimeout(prev);
     const delay = 1200 + Math.random() * 800;
@@ -98,10 +131,11 @@
       e.preventDefault();
       V.ensureAudio();
       dragging = true;
+      lastStreak = { x: e.clientX, y: e.clientY };
       try {
         grid.setPointerCapture(e.pointerId);
       } catch (_) {}
-      popBubble(bubbleAt(e.clientX, e.clientY) || e.target.closest(".bubble-cell"));
+      popBubble(bubbleAt(e.clientX, e.clientY) || e.target.closest(".bubble-cell"), null, e.clientX, e.clientY);
     },
     { passive: false }
   );
@@ -111,13 +145,14 @@
     (e) => {
       if (!dragging) return;
       e.preventDefault();
-      popBubble(bubbleAt(e.clientX, e.clientY));
+      popBubble(bubbleAt(e.clientX, e.clientY), null, e.clientX, e.clientY);
     },
     { passive: false }
   );
 
   function endDrag() {
     dragging = false;
+    lastStreak = null;
   }
   grid.addEventListener("pointerup", endDrag);
   grid.addEventListener("pointercancel", endDrag);
@@ -130,15 +165,18 @@
         popBubble(b, 0.85 + (i % 8) * 0.06);
         const r = b.getBoundingClientRect();
         const sr = stage.getBoundingClientRect();
-        if (i % 4 === 0) {
+        if (i % 3 === 0) {
           V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-            count: 6,
-            dist: 28,
-            colors: ["#5ce1e6", "#f4e8d8"],
+            count: 8,
+            dist: 36,
+            big: true,
+            colors: ["#5ce1e6", "#f4e8d8", "#ffe566"],
           });
         }
-      }, i * 28);
+      }, i * 24);
     });
+    V.screenShake(stage, 1.2, 6);
+    V.vibeHit("heavy");
   });
 
   window.addEventListener("resize", () => {

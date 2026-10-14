@@ -121,7 +121,7 @@
       masterAnalyser = ctx.createAnalyser();
       masterAnalyser.fftSize = 256;
       masterOut = ctx.createGain();
-      masterOut.gain.value = muted ? 0 : 1.15;
+      masterOut.gain.value = muted ? 0 : 1.35;
       masterOut.connect(masterAnalyser);
       masterAnalyser.connect(ctx.destination);
     }
@@ -146,7 +146,7 @@
   function setMuted(v) {
     muted = !!v;
     const out = getMasterOut();
-    if (out) out.gain.value = muted ? 0 : 1.15;
+    if (out) out.gain.value = muted ? 0 : 1.35;
     try {
       localStorage.setItem("chuqikou-mute", muted ? "1" : "0");
     } catch (_) {}
@@ -195,41 +195,51 @@
     if (!ctx || muted) return;
     pokeSilentBuffer(ctx);
     const t = ctx.currentTime;
-    const i = Math.max(0, Math.min(2.5, intensity == null ? 0.9 : intensity));
+    const i = Math.max(0, Math.min(3, intensity == null ? 1 : intensity));
+    // Sub bass punch
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(110 + i * 35, t);
-    osc.frequency.exponentialRampToValueAtTime(48, t + 0.14);
+    osc.frequency.setValueAtTime(95 + i * 40, t);
+    osc.frequency.exponentialRampToValueAtTime(36, t + 0.16);
     filter.type = "lowpass";
-    filter.frequency.value = 420;
+    filter.frequency.value = 380;
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.42 + i * 0.18, t + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.62 + i * 0.22, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(outNode());
     osc.start(t);
-    osc.stop(t + 0.2);
+    osc.stop(t + 0.22);
+    // Mid body click
     const mid = ctx.createOscillator();
     const mg = ctx.createGain();
     mid.type = "triangle";
-    mid.frequency.setValueAtTime(220 + i * 60, t);
-    mid.frequency.exponentialRampToValueAtTime(90, t + 0.07);
+    mid.frequency.setValueAtTime(260 + i * 70, t);
+    mid.frequency.exponentialRampToValueAtTime(70, t + 0.055);
     mg.gain.setValueAtTime(0.0001, t);
-    mg.gain.exponentialRampToValueAtTime(0.22 + i * 0.1, t + 0.004);
-    mg.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    mg.gain.exponentialRampToValueAtTime(0.38 + i * 0.14, t + 0.002);
+    mg.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
     mid.connect(mg);
     mg.connect(outNode());
     mid.start(t);
-    mid.stop(t + 0.1);
-    noiseBurst(ctx, t, 0.06, {
-      freq: 380 + i * 80,
+    mid.stop(t + 0.08);
+    // Transient noise transient
+    noiseBurst(ctx, t, 0.045, {
+      freq: 1400 + i * 200,
+      type: "highpass",
+      Q: 0.7,
+      gain: 0.42 + i * 0.14,
+      decay: 0.08,
+    });
+    noiseBurst(ctx, t, 0.09, {
+      freq: 320 + i * 90,
       type: "bandpass",
-      Q: 0.9,
-      gain: 0.28 + i * 0.1,
-      decay: 0.12,
+      Q: 0.85,
+      gain: 0.4 + i * 0.12,
+      decay: 0.14,
     });
   }
 
@@ -239,25 +249,32 @@
     pokeSilentBuffer(ctx);
     const t = ctx.currentTime;
     const p = pitch == null ? 1 : pitch;
-    const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.2, loudness));
+    const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "triangle";
-    osc.frequency.setValueAtTime((700 + Math.random() * 450) * p, t);
-    osc.frequency.exponentialRampToValueAtTime(140 * p, t + 0.07);
+    osc.frequency.setValueAtTime((780 + Math.random() * 520) * p, t);
+    osc.frequency.exponentialRampToValueAtTime(110 * p, t + 0.08);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.32 * loud, t + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.48 * loud, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
     osc.connect(gain);
     gain.connect(outNode());
     osc.start(t);
-    osc.stop(t + 0.11);
-    noiseBurst(ctx, t, 0.035, {
-      freq: 1800 * p,
+    osc.stop(t + 0.12);
+    // Thick membrane snap
+    noiseBurst(ctx, t, 0.05, {
+      freq: 2200 * p,
       type: "bandpass",
-      Q: 1.4,
-      gain: 0.22 * loud,
-      decay: 0.1,
+      Q: 1.6,
+      gain: 0.38 * loud,
+      decay: 0.09,
+    });
+    noiseBurst(ctx, t, 0.07, {
+      freq: 420 * p,
+      type: "lowpass",
+      gain: 0.28 * loud,
+      decay: 0.16,
     });
   }
 
@@ -266,7 +283,7 @@
     if (!ctx || muted) return;
     pokeSilentBuffer(ctx);
     const t = ctx.currentTime;
-    const bufferSize = Math.floor(ctx.sampleRate * 0.32);
+    const bufferSize = Math.floor(ctx.sampleRate * 0.28);
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -276,12 +293,12 @@
     src.buffer = buffer;
     const filter = ctx.createBiquadFilter();
     filter.type = "bandpass";
-    filter.frequency.setValueAtTime(1200, t);
-    filter.frequency.exponentialRampToValueAtTime(280, t + 0.28);
-    filter.Q.value = 0.7;
+    filter.frequency.setValueAtTime(1600, t);
+    filter.frequency.exponentialRampToValueAtTime(220, t + 0.24);
+    filter.Q.value = 0.65;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.38, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+    gain.gain.setValueAtTime(0.52, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
     src.connect(filter);
     filter.connect(gain);
     gain.connect(outNode());
@@ -293,21 +310,22 @@
     if (!ctx || muted) return;
     pokeSilentBuffer(ctx);
     const t = ctx.currentTime;
-    const scale = big ? 1.55 : 1;
-    noiseBurst(ctx, t, 0.1, { freq: 2400, type: "highpass", gain: 0.45 * scale, decay: 0.12 });
-    noiseBurst(ctx, t, 0.14, { freq: 900, type: "bandpass", Q: 0.8, gain: 0.32 * scale, decay: 0.2 });
+    const scale = big ? 1.85 : 1.15;
+    noiseBurst(ctx, t, 0.08, { freq: 3200, type: "highpass", gain: 0.62 * scale, decay: 0.08 });
+    noiseBurst(ctx, t, 0.12, { freq: 1100, type: "bandpass", Q: 0.75, gain: 0.48 * scale, decay: 0.16 });
+    noiseBurst(ctx, t, 0.16, { freq: 280, type: "lowpass", gain: 0.36 * scale, decay: 0.22 });
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(big ? 1600 : 1200, t);
-    osc.frequency.exponentialRampToValueAtTime(400, t + 0.12);
+    osc.type = "square";
+    osc.frequency.setValueAtTime(big ? 1800 : 1300, t);
+    osc.frequency.exponentialRampToValueAtTime(280, t + 0.1);
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.2 * scale, t + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.28 * scale, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
     osc.connect(gain);
     gain.connect(outNode());
     osc.start(t);
-    osc.stop(t + 0.15);
+    osc.stop(t + 0.13);
   }
 
   function playBurst() {
@@ -318,15 +336,28 @@
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(45, t + 0.42);
-    gain.gain.setValueAtTime(0.48, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
+    osc.frequency.setValueAtTime(280, t);
+    osc.frequency.exponentialRampToValueAtTime(32, t + 0.48);
+    gain.gain.setValueAtTime(0.68, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
     osc.connect(gain);
     gain.connect(outNode());
     osc.start(t);
-    osc.stop(t + 0.5);
-    noiseBurst(ctx, t, 0.28, { freq: 500, type: "lowpass", gain: 0.5, decay: 0.25 });
+    osc.stop(t + 0.56);
+    // Bass boom
+    const bass = ctx.createOscillator();
+    const bg = ctx.createGain();
+    bass.type = "sine";
+    bass.frequency.setValueAtTime(90, t);
+    bass.frequency.exponentialRampToValueAtTime(28, t + 0.35);
+    bg.gain.setValueAtTime(0.55, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    bass.connect(bg);
+    bg.connect(outNode());
+    bass.start(t);
+    bass.stop(t + 0.42);
+    noiseBurst(ctx, t, 0.22, { freq: 2800, type: "highpass", gain: 0.55, decay: 0.12 });
+    noiseBurst(ctx, t, 0.35, { freq: 420, type: "lowpass", gain: 0.62, decay: 0.28 });
     playWhoosh();
   }
 
@@ -336,7 +367,7 @@
     pokeSilentBuffer(ctx);
     const t = ctx.currentTime;
     const freqs = [392, 588, 784];
-    const peaks = [0.28, 0.1, 0.05];
+    const peaks = [0.34, 0.14, 0.07];
     freqs.forEach((f, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -344,17 +375,19 @@
       osc.type = "sine";
       osc.frequency.setValueAtTime(f, t);
       filter.type = "lowpass";
-      filter.frequency.value = 2200;
+      filter.frequency.value = 2400;
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peaks[i], t + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      gain.gain.exponentialRampToValueAtTime(peaks[i], t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(outNode());
       osc.start(t);
-      osc.stop(t + 0.52);
+      osc.stop(t + 0.5);
     });
-    noiseBurst(ctx, t, 0.045, { freq: 480, type: "bandpass", Q: 1.3, gain: 0.2, decay: 0.12 });
+    // Crisp wood attack
+    noiseBurst(ctx, t, 0.035, { freq: 920, type: "bandpass", Q: 1.8, gain: 0.32, decay: 0.08 });
+    noiseBurst(ctx, t, 0.05, { freq: 380, type: "bandpass", Q: 1.2, gain: 0.22, decay: 0.12 });
   }
 
   function playTick() {
@@ -399,8 +432,10 @@
     const ctx = ensureAudio();
     if (!ctx || muted) return;
     pokeSilentBuffer(ctx);
-    playPop(0.7, 1.4);
-    noiseBurst(ctx, ctx.currentTime, 0.12, { freq: 320, type: "lowpass", gain: 0.4, decay: 0.22 });
+    playPop(0.65, 1.85);
+    const t = ctx.currentTime;
+    noiseBurst(ctx, t, 0.14, { freq: 280, type: "lowpass", gain: 0.55, decay: 0.25 });
+    noiseBurst(ctx, t, 0.08, { freq: 1600, type: "bandpass", Q: 1.1, gain: 0.4, decay: 0.12 });
   }
 
   /* —— Visual juice —— */
@@ -430,22 +465,62 @@
     }, o.ms || 900);
   }
 
-  function screenShake(el, intensity) {
+  function screenShake(el, intensity, combo) {
     if (!el || reducedMotion) return;
-    const i = Math.max(0.3, Math.min(2.5, intensity == null ? 1 : intensity));
-    el.classList.remove("is-shake", "is-shake-hard");
+    const cBoost = combo ? Math.min(1.4, 0.35 + combo * 0.08) : 0;
+    const i = Math.max(0.4, Math.min(3.5, (intensity == null ? 1 : intensity) + cBoost));
+    el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
     void el.offsetWidth;
-    el.classList.add(i >= 1.4 ? "is-shake-hard" : "is-shake");
-    el.style.setProperty("--shake-amp", (4 * i).toFixed(1) + "px");
+    const cls = i >= 2.2 ? "is-shake-mega" : i >= 1.2 ? "is-shake-hard" : "is-shake";
+    el.classList.add(cls);
+    el.style.setProperty("--shake-amp", (6 * i).toFixed(1) + "px");
     setTimeout(() => {
-      el.classList.remove("is-shake", "is-shake-hard");
-    }, i >= 1.4 ? 220 : 140);
+      el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
+    }, i >= 2.2 ? 320 : i >= 1.2 ? 240 : 160);
+  }
+
+  /** Brief freeze-frame hit-stop (20–40ms typical). */
+  function hitStop(ms) {
+    if (reducedMotion) return;
+    const dur = Math.max(12, Math.min(48, ms == null ? 28 : ms));
+    const root = document.documentElement;
+    root.classList.add("is-hitstop");
+    setTimeout(() => root.classList.remove("is-hitstop"), dur);
+  }
+
+  /** White / chromatic impact flash overlay on stage. */
+  function impactFlash(parent, opts) {
+    if (!parent || reducedMotion) return;
+    const o = opts || {};
+    const flash = document.createElement("div");
+    flash.className = "impact-flash" + (o.heavy ? " is-heavy" : "") + (o.chromatic ? " is-chromatic" : "");
+    parent.appendChild(flash);
+    setTimeout(() => {
+      try { flash.remove(); } catch (_) {}
+    }, o.ms || 180);
+  }
+
+  /** Combo-aware vibrate: longer patterns on big hits. */
+  function vibeHit(kind) {
+    try {
+      if (!navigator.vibrate) return;
+      const patterns = {
+        light: 10,
+        tap: 14,
+        hit: [12, 18, 22],
+        heavy: [18, 30, 28, 40, 35],
+        boss: [22, 40, 30, 50, 40],
+        burst: [25, 45, 35, 55, 40, 30],
+        calm: 8,
+      };
+      navigator.vibrate(patterns[kind] || patterns.hit);
+    } catch (_) {}
   }
 
   function createParticleBurst(parent, x, y, opts) {
     if (!parent || reducedMotion) return;
     const o = opts || {};
-    const n = o.count || 12;
+    const n = o.count || 18;
     const colors = o.colors || ["#5ce1e6", "#ff3d7f", "#ffe566", "#f4e8d8"];
     const layer = document.createElement("div");
     layer.className = "particle-burst";
@@ -454,20 +529,26 @@
     parent.appendChild(layer);
     for (let i = 0; i < n; i++) {
       const p = document.createElement("span");
-      p.className = "particle-dot" + (o.star ? " is-star" : "");
-      const ang = (Math.PI * 2 * i) / n + Math.random() * 0.4;
-      const dist = (o.dist || 48) * (0.45 + Math.random() * 0.7);
+      const big = o.big || o.star;
+      p.className = "particle-dot" + (o.star ? " is-star" : "") + (big ? " is-big" : "");
+      const ang = (Math.PI * 2 * i) / n + Math.random() * 0.45;
+      const dist = (o.dist || 72) * (0.5 + Math.random() * 0.75);
       p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
       p.style.setProperty("--dy", Math.sin(ang) * dist + "px");
       p.style.background = colors[i % colors.length];
       p.style.color = colors[i % colors.length];
+      if (big) {
+        const sz = 10 + Math.random() * 10;
+        p.style.width = sz + "px";
+        p.style.height = sz + "px";
+      }
       layer.appendChild(p);
     }
     setTimeout(() => {
       try {
         layer.remove();
       } catch (_) {}
-    }, o.ms || 700);
+    }, o.ms || 750);
   }
 
   function createShockwave(parent, x, y) {
@@ -635,6 +716,9 @@
     setGameStat,
     spawnFloatingText,
     screenShake,
+    hitStop,
+    impactFlash,
+    vibeHit,
     createParticleBurst,
     createShockwave,
     setMuted,

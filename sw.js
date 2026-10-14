@@ -1,5 +1,5 @@
 /* 出气口 — offline cache, local-only app shell */
-const CACHE = 'chuqikou-v7';
+const CACHE = 'chuqikou-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -18,12 +18,18 @@ const ASSETS = [
   './js/games/rage.js',
   './js/games/squeeze.js',
   './js/games/muyu.js',
+  './js/games/glass.js',
+  './js/games/mole.js',
+  './js/games/rip.js',
   './games/bag.html',
   './games/bubble.html',
   './games/plates.html',
   './games/rage.html',
   './games/squeeze.html',
   './games/muyu.html',
+  './games/glass.html',
+  './games/mole.html',
+  './games/rip.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png'

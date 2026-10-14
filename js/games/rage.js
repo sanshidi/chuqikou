@@ -1,6 +1,5 @@
 /**
  * 键盘宣泄 — frantic mash / key spam → explode release
- * Interaction: keydown OR pointer spam fills meter; at 100% release = full burst
  */
 (function () {
   "use strict";
@@ -9,7 +8,7 @@
   const hud = document.getElementById("hudStats");
   V.bindMuteButton(document.getElementById("muteBtn"));
 
-  const WORDS = ["啊！", "怒！", "滚！", "烦！", "够了！", "！！", "哼", "哈"];
+  const WORDS = ["啊！", "怒！", "滚！", "烦！", "够了！", "！！", "哼", "哈", "气！", "炸！", "嘶", "吼"];
   let meter = 0;
   let bursts = V.getGameStats("rage").bursts || 0;
   let mashTimes = [];
@@ -44,22 +43,24 @@
     peakRate = Math.max(peakRate, mashTimes.length);
   }
 
-  function spawnLetter(ch, x, y) {
+  function spawnLetter(ch, x, y, wild) {
     if (V.reducedMotion()) return;
     const el = document.createElement("span");
     el.className = "rage-letter";
     el.textContent = ch;
     el.style.left = x + "px";
     el.style.top = y + "px";
-    el.style.setProperty("--lx", (Math.random() * 80 - 40).toFixed(0) + "px");
-    el.style.setProperty("--ly", (-60 - Math.random() * 70).toFixed(0) + "px");
-    el.style.setProperty("--lr", (Math.random() * 50 - 25).toFixed(0) + "deg");
+    el.style.fontSize = (1.2 + Math.random() * (wild ? 1.6 : 0.8)) + "rem";
+    el.style.color = wild
+      ? ["#ff3d7f", "#ffe566", "#5ce1e6", "#fff"][(Math.random() * 4) | 0]
+      : "#ff3d7f";
+    el.style.setProperty("--lx", (Math.random() * 140 - 70).toFixed(0) + "px");
+    el.style.setProperty("--ly", (-80 - Math.random() * 100).toFixed(0) + "px");
+    el.style.setProperty("--lr", (Math.random() * 80 - 40).toFixed(0) + "deg");
     mashZone.appendChild(el);
     setTimeout(() => {
-      try {
-        el.remove();
-      } catch (_) {}
-    }, 750);
+      try { el.remove(); } catch (_) {}
+    }, 800);
   }
 
   function addRage(n, keyLabel, clientX, clientY) {
@@ -73,20 +74,27 @@
     meter = Math.min(100, meter + n);
     fill.style.width = meter + "%";
     trackRate();
-    V.recordHit("rage", { vibrateMs: 5, comboWindowMs: 350 });
+    V.recordHit("rage", { vibrateMs: 0, comboWindowMs: 350 });
     V.playTick();
-    V.screenShake(stage, 0.35 + n * 0.05);
+    if (meter > 70) V.playThud(0.45 + (meter - 70) / 80);
+    V.screenShake(stage, 0.45 + n * 0.08 + meter / 120, Math.floor(meter / 15));
+    if (meter > 85) V.vibeHit("tap");
+    else V.vibrate(6);
 
     const rect = mashZone.getBoundingClientRect();
     const x = clientX != null ? clientX - rect.left : randIn(rect.width);
     const y = clientY != null ? clientY - rect.top : randIn(rect.height);
     const ch = keyLabel || WORDS[(Math.random() * WORDS.length) | 0];
-    spawnLetter(ch, x, y);
+    spawnLetter(ch, x, y, meter > 60);
+    if (meter > 50 && Math.random() < 0.4) {
+      spawnLetter(WORDS[(Math.random() * WORDS.length) | 0], randIn(rect.width), randIn(rect.height), true);
+    }
 
     if (meter >= 100) {
       prompt.textContent = "满了！再按一下释放！！";
       fill.style.boxShadow = "0 0 28px #ffe566";
       arena.classList.add("combo-flash");
+      V.impactFlash(stage, { chromatic: true });
     }
     updateHud();
   }
@@ -109,20 +117,23 @@
     burst.classList.add("go");
     crack.classList.add("go");
     V.playBurst();
-    V.vibrate([20, 40, 30]);
-    V.screenShake(stage, 2.2);
+    V.playCrack(true);
+    V.vibeHit("burst");
+    V.screenShake(stage, 3.0, 12);
+    V.hitStop(40);
+    V.impactFlash(stage, { heavy: true, chromatic: true });
     V.createParticleBurst(stage, stage.clientWidth / 2, stage.clientHeight / 2, {
-      count: 36,
-      dist: 110,
+      count: 48,
+      dist: 140,
       star: true,
-      colors: ["#ff3d7f", "#ffe566", "#5ce1e6", "#f4e8d8"],
-      ms: 900,
+      big: true,
+      colors: ["#ff3d7f", "#ffe566", "#5ce1e6", "#f4e8d8", "#fff"],
+      ms: 1000,
     });
-    // flying overload letters
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 22; i++) {
       setTimeout(() => {
-        spawnLetter(WORDS[i % WORDS.length], randIn(mashZone.clientWidth), randIn(mashZone.clientHeight));
-      }, i * 40);
+        spawnLetter(WORDS[i % WORDS.length], randIn(mashZone.clientWidth), randIn(mashZone.clientHeight), true);
+      }, i * 28);
     }
     prompt.textContent = "呼——再来一轮";
     updateHud();
@@ -131,7 +142,7 @@
       prompt.textContent = "狂按键盘或猛点下方区域";
       burst.classList.remove("go");
       crack.classList.remove("go");
-    }, 700);
+    }, 800);
   }
 
   function onKey(e) {
@@ -139,22 +150,15 @@
     if (e.key === "Escape" || e.key === "Tab") return;
     e.preventDefault();
     V.ensureAudio();
-    if (meter >= 100) {
-      release();
-      return;
-    }
-    const label =
-      e.key.length === 1 ? e.key.toUpperCase() : WORDS[(Math.random() * WORDS.length) | 0];
+    if (meter >= 100) { release(); return; }
+    const label = e.key.length === 1 ? e.key.toUpperCase() : WORDS[(Math.random() * WORDS.length) | 0];
     addRage(3.2, label);
   }
 
   function onPointer(e) {
     e.preventDefault();
     V.ensureAudio();
-    if (meter >= 100) {
-      release();
-      return;
-    }
+    if (meter >= 100) { release(); return; }
     addRage(4.2, null, e.clientX, e.clientY);
   }
 
@@ -162,17 +166,13 @@
   mashZone.addEventListener("pointerdown", onPointer, { passive: false });
   arena.addEventListener("pointerdown", (e) => {
     if (e.target === mashZone) return;
-    // allow tapping prompt/meter area too
     if (meter >= 100) {
       e.preventDefault();
       release();
     }
   });
 
-  // focus mash zone for keyboard
   setTimeout(() => {
-    try {
-      mashZone.focus();
-    } catch (_) {}
+    try { mashZone.focus(); } catch (_) {}
   }, 100);
 })();

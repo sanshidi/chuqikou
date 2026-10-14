@@ -170,16 +170,17 @@ html, body {
 }
 .particle-dot {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   left: 0;
   top: 0;
-  animation: particle-fly 0.55s ease-out forwards;
+  animation: particle-fly 0.6s ease-out forwards;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
 }
 .particle-dot.is-star {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
   border-radius: 0;
 }
@@ -205,29 +206,89 @@ html, body {
 }
 
 .game-stage-full.is-shake {
-  animation: stage-shake 0.14s linear;
+  animation: stage-shake 0.16s linear;
 }
 .game-stage-full.is-shake-hard {
-  animation: stage-shake-hard 0.22s linear;
+  animation: stage-shake-hard 0.24s linear;
+}
+.game-stage-full.is-shake-mega {
+  animation: stage-shake-mega 0.32s linear;
 }
 @keyframes stage-shake {
   0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(calc(var(--shake-amp, 4px) * -1)); }
-  75% { transform: translateX(var(--shake-amp, 4px)); }
+  25% { transform: translateX(calc(var(--shake-amp, 6px) * -1)); }
+  75% { transform: translateX(var(--shake-amp, 6px)); }
 }
 @keyframes stage-shake-hard {
   0%, 100% { transform: translate(0, 0); }
-  20% { transform: translate(-8px, 3px); }
-  40% { transform: translate(7px, -4px); }
-  60% { transform: translate(-5px, -2px); }
-  80% { transform: translate(6px, 3px); }
+  15% { transform: translate(calc(var(--shake-amp, 10px) * -1), 4px); }
+  35% { transform: translate(var(--shake-amp, 10px), -5px); }
+  55% { transform: translate(calc(var(--shake-amp, 10px) * -0.7), -3px); }
+  75% { transform: translate(calc(var(--shake-amp, 10px) * 0.8), 4px); }
+}
+@keyframes stage-shake-mega {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-14px, 6px) rotate(-0.6deg); }
+  25% { transform: translate(16px, -8px) rotate(0.7deg); }
+  40% { transform: translate(-12px, -5px) rotate(-0.5deg); }
+  55% { transform: translate(13px, 7px) rotate(0.4deg); }
+  70% { transform: translate(-8px, 3px) rotate(-0.3deg); }
+  85% { transform: translate(7px, -2px) rotate(0.2deg); }
+}
+
+html.is-hitstop .game-stage-full {
+  animation-play-state: paused !important;
+}
+html.is-hitstop .game-stage-full * {
+  animation-play-state: paused !important;
+}
+
+.impact-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 25;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.55), transparent 55%);
+  animation: impact-flash-fade 0.16s ease-out forwards;
+}
+.impact-flash.is-heavy {
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.75), rgba(255, 61, 127, 0.25) 40%, transparent 65%);
+  animation-duration: 0.22s;
+}
+.impact-flash.is-chromatic {
+  background:
+    radial-gradient(circle at 48% 42%, rgba(255, 80, 120, 0.35), transparent 50%),
+    radial-gradient(circle at 52% 48%, rgba(80, 220, 255, 0.35), transparent 50%),
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.4), transparent 45%);
+  mix-blend-mode: screen;
+  animation-duration: 0.2s;
+}
+@keyframes impact-flash-fade {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .combo-flash { animation: combo-pulse 0.2s ease-out; }
 @keyframes combo-pulse {
-  0% { filter: brightness(1); }
-  50% { filter: brightness(1.4); }
-  100% { filter: brightness(1); }
+  0% { filter: brightness(1) saturate(1); }
+  40% { filter: brightness(1.55) saturate(1.35); }
+  100% { filter: brightness(1) saturate(1); }
+}
+
+.particle-dot.is-big {
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 10px currentColor;
+}
+.float-dmg.is-crit {
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  animation: float-up-crit 0.95s ease-out forwards;
+}
+@keyframes float-up-crit {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); filter: brightness(2); }
+  30% { opacity: 1; transform: translate(-50%, -70%) scale(1.25); }
+  100% { opacity: 0; transform: translate(-50%, -140%) scale(1.05); }
 }
 
 /* ========== BAG — hanging swing ========== */
@@ -710,6 +771,8 @@ html, body {
   .shockwave-ring,
   .game-stage-full.is-shake,
   .game-stage-full.is-shake-hard,
+  .game-stage-full.is-shake-mega,
+  .impact-flash,
   .combo-flash,
   .rage-letter,
   .rage-burst-overlay.go,
@@ -727,6 +790,208 @@ html, body {
   }
 }
 
+
+/* ========== GLASS — smash cracks ========== */
+.glass-arena {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+  background:
+    linear-gradient(160deg, rgba(40, 55, 80, 0.5), rgba(12, 10, 18, 0.9)),
+    repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(92, 225, 230, 0.03) 40px, rgba(92, 225, 230, 0.03) 41px);
+}
+.glass-arena canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.glass-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  display: flex;
+  gap: 0.5rem;
+}
+.glass-clear {
+  appearance: none;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid rgba(92, 225, 230, 0.5);
+  background: rgba(12, 10, 18, 0.75);
+  color: var(--cyan, #5ce1e6);
+  font-family: var(--font-display, serif);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  clip-path: polygon(0 5px, 5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+}
+
+/* ========== MOLE — whack targets ========== */
+.mole-arena {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 0.75rem;
+  touch-action: none;
+}
+.mole-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.5rem, 2vw, 1rem);
+  width: min(92%, 380px);
+}
+.mole-hole {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #2a1f3d, #0c0a12 70%);
+  border: 2px solid rgba(255, 61, 127, 0.35);
+  overflow: hidden;
+  box-shadow: inset 0 10px 20px rgba(0, 0, 0, 0.55);
+  touch-action: none;
+}
+.mole-target {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  width: 72%;
+  height: 72%;
+  transform: translateX(-50%) translateY(110%);
+  border-radius: 50% 50% 42% 42%;
+  background: radial-gradient(circle at 35% 30%, #ffe566, #ff3d7f 55%, #8a1a40);
+  display: grid;
+  place-items: center;
+  font-size: clamp(1.4rem, 6vw, 2rem);
+  transition: transform 0.14s cubic-bezier(0.2, 1.4, 0.4, 1);
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(255, 61, 127, 0.45);
+  touch-action: none;
+  user-select: none;
+}
+.mole-target.is-up {
+  transform: translateX(-50%) translateY(0);
+}
+.mole-target.is-smashed {
+  transform: translateX(-50%) translateY(20%) scale(1.15, 0.55);
+  filter: brightness(1.4);
+  transition: transform 0.08s ease-out;
+}
+.mole-target.is-boss {
+  background: radial-gradient(circle at 35% 30%, #b8fff5, #5ce1e6 40%, #1a4a80 85%);
+  box-shadow: 0 0 24px rgba(92, 225, 230, 0.6);
+}
+
+/* ========== RIP — tear paper ========== */
+.rip-arena {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  touch-action: none;
+}
+.rip-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  max-width: 96%;
+}
+.rip-chip {
+  appearance: none;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(255, 61, 127, 0.4);
+  background: rgba(255, 61, 127, 0.08);
+  color: var(--paper, #f4e8d8);
+  font-size: 0.78rem;
+  cursor: pointer;
+  clip-path: polygon(0 4px, 4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+}
+.rip-chip.is-on {
+  border-color: var(--cyan);
+  background: rgba(92, 225, 230, 0.15);
+  color: var(--cyan);
+}
+.rip-sheet-wrap {
+  position: relative;
+  width: min(88%, 320px);
+  height: min(48vh, 340px);
+  touch-action: none;
+}
+.rip-sheet {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #f4e8d8, #e8d4b8);
+  color: #2a1f3d;
+  font-family: var(--font-display, serif);
+  font-size: clamp(1.1rem, 4.5vw, 1.45rem);
+  letter-spacing: 0.12em;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 1.2rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+  line-height: 1.55;
+}
+.rip-sheet.is-ripping {
+  transition: clip-path 0.05s linear;
+}
+.rip-shard {
+  position: absolute;
+  background: linear-gradient(180deg, #f4e8d8, #e0c8a0);
+  color: #2a1f3d;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  animation: rip-fly 0.7s ease-out forwards;
+}
+@keyframes rip-fly {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  100% { opacity: 0; transform: translate(var(--rx), var(--ry)) rotate(var(--rr)); }
+}
+.rip-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* drag streak for bubble */
+.bubble-streak {
+  position: absolute;
+  pointer-events: none;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(92, 225, 230, 0.7), rgba(255, 229, 102, 0.8));
+  transform-origin: left center;
+  z-index: 8;
+  animation: streak-fade 0.28s ease-out forwards;
+  box-shadow: 0 0 12px rgba(92, 225, 230, 0.5);
+}
+@keyframes streak-fade {
+  0% { opacity: 0.9; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1.15); }
+}
+
+.bag-body-xl.is-squash {
+  border-radius: 48% 48% 50% 50% / 32% 32% 62% 62%;
+  transform: scaleX(1.14) scaleY(0.84);
+  filter: brightness(1.15);
+}
 
 /* Tap-to-enable audio (mobile / WeChat) */
 .audio-unlock-banner {

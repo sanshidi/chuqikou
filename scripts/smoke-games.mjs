@@ -33,12 +33,18 @@ const PAGES = [
   "/games/rage.html",
   "/games/squeeze.html",
   "/games/muyu.html",
+  "/games/glass.html",
+  "/games/mole.html",
+  "/games/rip.html",
   "/js/games/bag.js",
   "/js/games/bubble.js",
   "/js/games/plates.js",
   "/js/games/rage.js",
   "/js/games/squeeze.js",
   "/js/games/muyu.js",
+  "/js/games/glass.js",
+  "/js/games/mole.js",
+  "/js/games/rip.js",
 ];
 
 function serve(port) {
@@ -86,7 +92,7 @@ async function browserAudio(port) {
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required"],
   });
   const fails = [];
-  const games = ["bag", "bubble", "plates", "rage", "squeeze", "muyu"];
+  const games = ["bag", "bubble", "plates", "rage", "squeeze", "muyu", "glass", "mole", "rip"];
   for (const id of games) {
     const page = await browser.newPage();
     page.on("pageerror", (e) => fails.push(id + " pageerror: " + e.message));
@@ -111,6 +117,9 @@ async function browserAudio(port) {
         ["playWoodChime", () => V.playWoodChime()],
         ["playKnead", () => V.playKnead && V.playKnead(1)],
         ["playSplat", () => V.playSplat && V.playSplat()],
+        ["screenShake", () => V.screenShake && V.screenShake(document.getElementById("stage"), 1.5, 5)],
+        ["hitStop", () => V.hitStop && V.hitStop(20)],
+        ["impactFlash", () => V.impactFlash && V.impactFlash(document.getElementById("stage"), { heavy: true })],
       ];
       const thrown = [];
       let peak = 0;

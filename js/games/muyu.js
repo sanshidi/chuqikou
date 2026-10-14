@@ -1,6 +1,5 @@
 /**
  * 敲木鱼 — calm rhythmic tap, merit accumulation (not rage)
- * Interaction: deliberate taps; floating 功德; soft glow; localStorage merit
  */
 (function () {
   "use strict";
@@ -86,7 +85,7 @@
     const sr = stage.getBoundingClientRect();
     const cx = r.left + r.width / 2 - sr.left;
     const cy = r.top + r.height * 0.45 - sr.top;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const m = document.createElement("span");
       m.className = "muyu-mote";
       m.style.left = cx + (Math.random() * 40 - 20) + "px";
@@ -95,9 +94,7 @@
       m.style.setProperty("--my", (-30 - Math.random() * 50).toFixed(0) + "px");
       stage.appendChild(m);
       setTimeout(() => {
-        try {
-          m.remove();
-        } catch (_) {}
+        try { m.remove(); } catch (_) {}
       }, 1200);
     }
   }
@@ -106,7 +103,6 @@
     if (e) e.preventDefault();
     V.ensureAudio();
     const now = performance.now();
-    // gentle debounce — avoid frantic mash feeling
     if (lastHit && now - lastHit < 120) return;
     if (lastHit) updateRhythm(now - lastHit);
     else rhythm.textContent = "慢慢来就好";
@@ -114,19 +110,25 @@
     hits++;
     merit++;
     V.setGameStat("muyu", { merit: merit });
-    V.recordHit("muyu", { vibrateMs: 8, comboWindowMs: 1400 });
+    V.recordHit("muyu", { vibrateMs: 0, comboWindowMs: 1400 });
     V.playWoodChime();
+    V.vibeHit("calm");
 
     const calm = Math.random() < 0.18;
     const r = btn.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
-    V.spawnFloatingText(
-      stage,
-      calm ? "心安" : "功德 +1",
-      r.left + r.width / 2 - sr.left + (Math.random() * 30 - 15),
-      r.top - sr.top + 20,
-      { px: true, calm: true }
-    );
+    const fx = r.left + r.width / 2 - sr.left + (Math.random() * 30 - 15);
+    const fy = r.top - sr.top + 20;
+    V.spawnFloatingText(stage, calm ? "心安" : "功德 +1", fx, fy, { px: true, calm: true });
+    // crisp float pop — tiny soft pulse, no rage shake
+    if (!reduced) {
+      V.createParticleBurst(stage, fx, fy + 30, {
+        count: 5,
+        dist: 28,
+        colors: ["#5ce1e6", "#b8fff5", "#f4e8d8"],
+        ms: 600,
+      });
+    }
     spawnMotes();
 
     if (hits % 5 === 0) line.textContent = lines[((hits / 5) | 0) % lines.length];

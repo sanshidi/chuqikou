@@ -1,6 +1,5 @@
 /**
  * 砸盘子 — Rage Pit lite: drifting/falling plates, tap to shatter, boss plates
- * Interaction: aim-tap smash on canvas; endless spawn; combo shards
  */
 (function () {
   "use strict";
@@ -18,15 +17,14 @@
   const fireEl = document.getElementById("platesFire");
   const ctx = canvas.getContext("2d");
 
-  let w = 0,
-    h = 0,
-    dpr = 1;
+  let w = 0, h = 0, dpr = 1;
   let plates = [];
   let particles = [];
   let smashed = 0;
   let running = true;
   let raf = 0;
   let spawnAcc = 0;
+  let camPunch = 0;
 
   function rand(a, b) {
     return a + Math.random() * (b - a);
@@ -64,22 +62,22 @@
   }
 
   function shatter(p, combo) {
-    const shardN = Math.min(48, 16 + (combo || 1) * 3 + (p.boss ? 18 : 0));
+    const shardN = Math.min(64, 22 + (combo || 1) * 4 + (p.boss ? 24 : 0));
     for (let i = 0; i < shardN; i++) {
       const ang = rand(0, Math.PI * 2);
-      const sp = rand(2.5, 9) * (p.boss ? 1.3 : 1);
+      const sp = rand(3.2, 11) * (p.boss ? 1.45 : 1.15);
       particles.push({
         x: p.x,
         y: p.y,
         vx: Math.cos(ang) * sp,
-        vy: Math.sin(ang) * sp - 2,
+        vy: Math.sin(ang) * sp - 2.5,
         life: 1,
         rot: rand(0, Math.PI),
-        vr: rand(-0.2, 0.2),
-        w: rand(4, 12),
-        h: rand(3, 8),
+        vr: rand(-0.25, 0.25),
+        w: rand(5, 16),
+        h: rand(4, 11),
         hue: p.hue,
-        dust: Math.random() < 0.35,
+        dust: Math.random() < 0.3,
       });
     }
   }
@@ -89,40 +87,51 @@
     if (p.boss && p.hp > 1) {
       p.hp--;
       p.cracked = true;
-      p.vr += rand(-0.08, 0.08);
+      p.vr += rand(-0.1, 0.1);
       V.playCrack(false);
-      V.vibrate(16);
-      V.screenShake(stage, 0.7);
+      V.vibeHit("hit");
+      V.screenShake(stage, 1.1, 2);
+      V.hitStop(22);
+      V.impactFlash(stage, {});
       V.spawnFloatingText(stage, "裂纹!", p.x, p.y, { px: true });
-      // crack dust
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 12; i++) {
         const ang = rand(0, Math.PI * 2);
         particles.push({
-          x: p.x,
-          y: p.y,
-          vx: Math.cos(ang) * rand(1, 3),
-          vy: Math.sin(ang) * rand(1, 3),
-          life: 0.7,
-          rot: 0,
-          vr: 0,
-          w: 3,
-          h: 3,
-          hue: p.hue,
-          dust: true,
+          x: p.x, y: p.y,
+          vx: Math.cos(ang) * rand(1.5, 4),
+          vy: Math.sin(ang) * rand(1.5, 4),
+          life: 0.75, rot: 0, vr: 0, w: 4, h: 4, hue: p.hue, dust: true,
         });
       }
       return;
     }
     p.alive = false;
     smashed++;
-    const st = V.recordHit("plates", { vibrateMs: 22 });
+    const st = V.recordHit("plates", { vibrateMs: 0 });
     shatter(p, st.combo);
     V.playCrack(!!p.boss);
-    if (st.combo >= 3) V.playThud(0.85);
-    if (p.boss) V.playBurst();
-    V.screenShake(stage, p.boss ? 2 : 0.9 + Math.min(1, st.combo / 10));
-    const label = p.boss ? "大盘粉碎 +" + (20 + st.combo) : "+" + (5 + Math.min(15, st.combo));
-    V.spawnFloatingText(stage, label, p.x, p.y, { px: true, critical: !!p.boss || st.combo >= 8 });
+    if (st.combo >= 2) V.playThud(1.1 + Math.min(1, st.combo / 10));
+    if (p.boss) {
+      V.playBurst();
+      V.vibeHit("boss");
+      V.hitStop(40);
+      V.impactFlash(stage, { heavy: true, chromatic: true });
+    } else {
+      V.vibeHit(st.combo >= 5 ? "heavy" : "hit");
+      V.hitStop(st.combo >= 6 ? 32 : 22);
+      V.impactFlash(stage, { heavy: st.combo >= 6, chromatic: st.combo >= 8 });
+    }
+    camPunch = p.boss ? 14 : 7 + Math.min(6, st.combo * 0.5);
+    V.screenShake(stage, p.boss ? 2.6 : 1.2 + Math.min(1.2, st.combo / 8), st.combo);
+    const label = p.boss ? "大盘粉碎 +" + (24 + st.combo) : "+" + (6 + Math.min(18, st.combo));
+    V.spawnFloatingText(stage, label, p.x, p.y, { px: true, critical: !!p.boss || st.combo >= 7 });
+    V.createParticleBurst(stage, p.x, p.y, {
+      count: p.boss ? 32 : 14,
+      big: true,
+      star: !!p.boss,
+      dist: p.boss ? 100 : 55,
+      colors: ["#ffe566", "#ff3d7f", "#f4e8d8", "#5ce1e6"],
+    });
     fireEl.classList.toggle("on", st.combo >= 5);
     V.setHud(
       hud,
@@ -136,9 +145,7 @@
     ctx.rotate(p.rot);
     ctx.beginPath();
     ctx.ellipse(0, 0, p.r, p.r * 0.72, 0, 0, Math.PI * 2);
-    ctx.fillStyle = p.boss
-      ? "hsl(" + p.hue + ", 65%, 70%)"
-      : "hsl(" + p.hue + ", 70%, 85%)";
+    ctx.fillStyle = p.boss ? "hsl(" + p.hue + ", 65%, 70%)" : "hsl(" + p.hue + ", 70%, 85%)";
     ctx.fill();
     ctx.strokeStyle = p.cracked ? "rgba(255,61,127,0.9)" : "hsl(" + p.hue + ", 40%, 45%)";
     ctx.lineWidth = p.boss ? 3 : 2;
@@ -176,24 +183,22 @@
       plates.push(spawnPlate(Math.random() < 0.55));
     }
 
-    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    if (camPunch > 0.2) {
+      const ox = (Math.random() - 0.5) * camPunch;
+      const oy = (Math.random() - 0.5) * camPunch;
+      ctx.translate(ox, oy);
+      camPunch *= 0.82;
+    } else camPunch = 0;
+    ctx.clearRect(-20, -20, w + 40, h + 40);
 
     for (const p of plates) {
       if (!p.alive) continue;
       p.x += p.vx * (dt / 16);
       p.y += p.vy * (dt / 16);
       p.rot += p.vr * (dt / 16);
-      if (!p.fromDrift) {
-        /* soft bounce edges */
-      }
-      if (p.x < p.r) {
-        p.x = p.r;
-        p.vx *= -1;
-      }
-      if (p.x > w - p.r) {
-        p.x = w - p.r;
-        p.vx *= -1;
-      }
+      if (p.x < p.r) { p.x = p.r; p.vx *= -1; }
+      if (p.x > w - p.r) { p.x = w - p.r; p.vx *= -1; }
       if (p.y > h + p.r + 40) p.alive = false;
       drawPlate(p);
     }
@@ -202,9 +207,9 @@
       const q = particles[i];
       q.x += q.vx;
       q.y += q.vy;
-      q.vy += 0.28;
+      q.vy += 0.3;
       q.rot += q.vr;
-      q.life -= q.dust ? 0.045 : 0.028;
+      q.life -= q.dust ? 0.045 : 0.026;
       if (q.life <= 0) {
         particles.splice(i, 1);
         continue;
@@ -219,6 +224,7 @@
       ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h);
       ctx.restore();
     }
+    ctx.restore();
 
     raf = requestAnimationFrame(loop);
   }
@@ -234,7 +240,7 @@
       if (!p.alive) continue;
       const dx = x - p.x;
       const dy = y - p.y;
-      if ((dx * dx) / (p.r * p.r) + (dy * dy) / (p.r * 0.72 * p.r * 0.72) <= 1.15) {
+      if ((dx * dx) / (p.r * p.r) + (dy * dy) / (p.r * 0.72 * p.r * 0.72) <= 1.2) {
         hitPlate(p);
         break;
       }
@@ -248,7 +254,6 @@
   raf = requestAnimationFrame(loop);
   canvas.addEventListener("pointerdown", onPointer, { passive: false });
   window.addEventListener("resize", resize);
-
   window.addEventListener("pagehide", () => {
     running = false;
     cancelAnimationFrame(raf);
