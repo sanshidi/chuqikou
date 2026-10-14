@@ -203,10 +203,13 @@
     }
 
     running = true;
-    reset();
+    requestAnimationFrame(() => {
+      if (!running) return;
+      reset();
+      raf = requestAnimationFrame(loop);
+    });
     canvas.addEventListener("pointerdown", onPointer);
     window.addEventListener("resize", resize);
-    raf = requestAnimationFrame(loop);
 
     return () => {
       running = false;
@@ -233,16 +236,19 @@
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     }
 
-    function spawn() {
+    function spawn(fromBelow) {
       const cssW = w / devicePixelRatio;
       const cssH = h / devicePixelRatio;
       const colors = ["#ff3d7f", "#5ce1e6", "#ffe566", "#c4a8ff", "#ff8fab"];
+      const y = fromBelow
+        ? cssH + rand(20, 80)
+        : rand(cssH * 0.25, cssH * 0.78);
       balloons.push({
-        x: rand(30, cssW - 30),
-        y: cssH + rand(20, 80),
-        r: rand(22, 36),
-        vy: -rand(1.2, 2.4),
-        vx: rand(-0.4, 0.4),
+        x: rand(30, Math.max(40, cssW - 30)),
+        y: y,
+        r: rand(24, 38),
+        vy: -rand(1.1, 2.2),
+        vx: rand(-0.45, 0.45),
         color: colors[(Math.random() * colors.length) | 0],
         alive: true,
       });
@@ -253,7 +259,7 @@
       balloons = [];
       popped = 0;
       spawnAcc = 0;
-      for (let i = 0; i < 5; i++) spawn();
+      for (let i = 0; i < 6; i++) spawn(false);
       vent.setStat("扎破 0 个");
     }
 
@@ -265,7 +271,7 @@
       spawnAcc++;
       if (spawnAcc > 45) {
         spawnAcc = 0;
-        spawn();
+        spawn(true);
       }
       for (let i = balloons.length - 1; i >= 0; i--) {
         const b = balloons[i];
@@ -306,7 +312,8 @@
         if (!b.alive) continue;
         const dx = x - b.x;
         const dy = y - b.y;
-        if (dx * dx + dy * dy < b.r * b.r) {
+        const hitR = b.r * 1.35;
+        if (dx * dx + dy * dy < hitR * hitR) {
           b.alive = false;
           popped++;
           vent.playPop();
@@ -317,10 +324,13 @@
     }
 
     running = true;
-    reset();
+    requestAnimationFrame(() => {
+      if (!running) return;
+      reset();
+      raf = requestAnimationFrame(loop);
+    });
     canvas.addEventListener("pointerdown", onPointer);
     window.addEventListener("resize", resize);
-    raf = requestAnimationFrame(loop);
 
     return () => {
       running = false;
@@ -376,6 +386,7 @@
 
     function onKey(e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape" || e.key === "Tab") return;
       e.preventDefault();
       if (meter >= 100) release();
       else addRage(3.5);
@@ -547,7 +558,7 @@
       fires.push({
         x: c * cw + cw / 2,
         y: r * ch + ch / 2,
-        life: 1.2,
+        life: 1.6,
         icon: ICONS[(Math.random() * ICONS.length) | 0],
         r: 28,
       });
@@ -559,6 +570,15 @@
       hit = 0;
       missed = 0;
       tick = 0;
+      spawn();
+      // guaranteed center fire for immediate play
+      fires.push({
+        x: (w / devicePixelRatio) / 2,
+        y: (h / devicePixelRatio) / 2,
+        life: 2.2,
+        icon: "🔥",
+        r: 28,
+      });
       vent.setStat("灭火 0 · 漏掉 0");
     }
 
@@ -617,7 +637,7 @@
         const f = fires[i];
         const dx = x - f.x;
         const dy = y - f.y;
-        if (dx * dx + dy * dy < 40 * 40) {
+        if (dx * dx + dy * dy < 48 * 48) {
           fires.splice(i, 1);
           hit++;
           vent.playPop();
@@ -628,10 +648,13 @@
     }
 
     running = true;
-    reset();
+    requestAnimationFrame(() => {
+      if (!running) return;
+      reset();
+      raf = requestAnimationFrame(loop);
+    });
     canvas.addEventListener("pointerdown", onPointer);
     window.addEventListener("resize", resize);
-    raf = requestAnimationFrame(loop);
 
     return () => {
       running = false;
@@ -648,6 +671,7 @@
     wrap.className = "notes-stage";
     stage.appendChild(wrap);
     let flung = 0;
+    let alive = true;
     const phrases = [
       "别管了",
       "烦死了",
@@ -732,7 +756,7 @@
         dragging = false;
         el.classList.remove("is-dragging");
         const speed = Math.hypot(data.vx, data.vy);
-        if (speed > 8) {
+        if (speed > 5.5) {
           el.classList.add("is-flung");
           const fx = data.vx * 40;
           const fy = data.vy * 40;
@@ -741,6 +765,7 @@
           flung++;
           vent.setStat("甩飞 " + flung + " 张");
           setTimeout(() => {
+            if (!alive) return;
             el.remove();
             if (wrap.querySelectorAll(".sticky-note:not(.is-flung)").length === 0) {
               vent.setStat("甩飞 " + flung + " 张 · 桌面清了");
@@ -755,10 +780,11 @@
       el.addEventListener("pointercancel", up);
     }
 
-    // wait a frame for layout
-    requestAnimationFrame(placeNotes);
+    // wait for modal flex layout
+    requestAnimationFrame(() => requestAnimationFrame(placeNotes));
 
     return () => {
+      alive = false;
       wrap.innerHTML = "";
     };
   };
@@ -916,23 +942,34 @@
       movePaddle(e.clientX);
     }
 
-    running = true;
-    reset();
-    canvas.addEventListener("pointerdown", onPointer);
-    canvas.addEventListener("pointermove", onPointer);
-    window.addEventListener("resize", () => {
-      const px = paddle.x / cssW;
+    function onWinResize() {
+      if (!paddle || !cssW) {
+        resize();
+        return;
+      }
+      const px = paddle.x / Math.max(1, cssW);
       resize();
       paddle.y = cssH - 28;
-      paddle.x = px * cssW;
+      paddle.x = Math.max(0, Math.min(cssW - paddle.w, px * cssW));
+    }
+
+    running = true;
+    // Defer one frame so modal flex layout has real height
+    requestAnimationFrame(() => {
+      if (!running) return;
+      reset();
+      raf = requestAnimationFrame(loop);
     });
-    raf = requestAnimationFrame(loop);
+    canvas.addEventListener("pointerdown", onPointer);
+    canvas.addEventListener("pointermove", onPointer);
+    window.addEventListener("resize", onWinResize);
 
     return () => {
       running = false;
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", onPointer);
       canvas.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("resize", onWinResize);
     };
   };
 

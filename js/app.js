@@ -430,11 +430,20 @@
     btnCloseGame.focus();
   }
 
+  stallGrid.addEventListener("pointerdown", () => {
+    ensureAudio();
+  }, { passive: true });
+
   stallGrid.addEventListener("click", (e) => {
     const stall = e.target.closest(".stall");
     if (!stall) return;
     openGame(stall.dataset.game);
   });
+
+  const gameSheet = gameModal.querySelector(".game-sheet");
+  if (gameSheet) {
+    gameSheet.addEventListener("click", (e) => e.stopPropagation());
+  }
 
   btnCloseGame.addEventListener("click", () => {
     closeGame();
