@@ -71,7 +71,7 @@
       <div class="panel-sign">
         <span class="sign-glow">情绪池</span>
       </div>
-      <p class="pool-lead">按住说话倒一倒。泡泡在池里会慢慢长大、往上飘。点泡泡可以听（再点暂停）；点泡泡上的「炸」或等引信到点才会炸掉。录音只在本机，从不上传；刷新即清空。</p>
+      <p class="pool-lead">按住说话，松手就丢进池。泡泡会慢慢长大、往上飘。点泡泡听/暂停；点「炸」或等引信到点才炸掉。录音只在本机，刷新即清空。</p>
 
       <div class="pool-controls">
         <div class="pool-row">
@@ -115,15 +115,15 @@
         <button type="button" class="neon-btn cyan" id="btnPoolPreview" disabled>试听变声</button>
         <button type="button" class="neon-btn violet" id="btnPoolDrop" disabled>再丢一颗</button>
       </div>
-      <p class="pool-status" id="poolStatus" role="status">按住麦克风倒一倒。变声很夸张，纯本地，从不上传。</p>
+      <p class="pool-status" id="poolStatus" role="status">先选引信和搞笑变声，再按住说话。池空着就按住录一段吧。</p>
       <p class="privacy-note" role="note">语音气泡仅保存在本页内存，关闭或刷新即消失；不会上传服务器。</p>
 
       <div class="pool-tank" id="poolTank" aria-label="情绪泡泡池">
         <canvas class="pool-fx" id="poolFx" aria-hidden="true"></canvas>
         <div class="pool-bubbles" id="poolBubbles"></div>
-        <p class="pool-empty" id="poolEmpty">池子还空着 · 录一段丢进来</p>
+        <p class="pool-empty" id="poolEmpty"><strong>池子还空着</strong><span>按住下方按钮说话，松手后泡泡会出现在这儿</span></p>
       </div>
-      <p class="pool-hint">越接近爆炸越大、越往上飘。点泡泡听/暂停 · 点「炸」炸掉 · 引信到点自动炸。</p>
+      <p class="pool-hint">近爆点 → 更大更高。点泡泡听 · 「炸」丢掉 · 引信到点自动炸。试听/再丢一颗可用上次录音。</p>
     </section>
 
     <!-- Game arcade hub -->
@@ -131,8 +131,8 @@
       <div class="panel-sign">
         <span class="sign-glow cyan">夜市出气摊</span>
       </div>
-      <p class="arcade-hint">点一个摊位开玩 · 全是抽象物件，纯本地</p>
-      <div class="stall-grid" id="stallGrid">
+      <p class="arcade-hint">精选 6 个摊位 · 出气 / 解压 / 安静 · 纯本地</p>
+            <div class="stall-grid" id="stallGrid">
         <button type="button" class="stall" data-game="bag">
           <span class="stall-icon" aria-hidden="true">🥊</span>
           <span class="stall-name">出气袋</span>
@@ -148,11 +148,6 @@
           <span class="stall-name">砸盘子</span>
           <span class="stall-desc">点一下就碎</span>
         </button>
-        <button type="button" class="stall" data-game="balloons">
-          <span class="stall-icon" aria-hidden="true">🎈</span>
-          <span class="stall-name">气球扎破</span>
-          <span class="stall-desc">戳浮起来的气球</span>
-        </button>
         <button type="button" class="stall" data-game="rage">
           <span class="stall-icon" aria-hidden="true">⌨️</span>
           <span class="stall-name">键盘宣泄</span>
@@ -162,26 +157,6 @@
           <span class="stall-icon" aria-hidden="true">🟡</span>
           <span class="stall-name">捏压力球</span>
           <span class="stall-desc">按住捏扁再弹回</span>
-        </button>
-        <button type="button" class="stall" data-game="shredder">
-          <span class="stall-icon" aria-hidden="true">📄</span>
-          <span class="stall-name">碎纸机</span>
-          <span class="stall-desc">拖进去粉碎烦恼</span>
-        </button>
-        <button type="button" class="stall" data-game="whack">
-          <span class="stall-icon" aria-hidden="true">🔥</span>
-          <span class="stall-name">消火</span>
-          <span class="stall-desc">戳灭冒出来的火</span>
-        </button>
-        <button type="button" class="stall" data-game="notes">
-          <span class="stall-icon" aria-hidden="true">📝</span>
-          <span class="stall-name">甩飞便签</span>
-          <span class="stall-desc">把烦心事甩出屏幕</span>
-        </button>
-        <button type="button" class="stall" data-game="breakout">
-          <span class="stall-icon" aria-hidden="true">🧱</span>
-          <span class="stall-name">碎砖块</span>
-          <span class="stall-desc">打掉烦恼砖墙</span>
         </button>
         <button type="button" class="stall" data-game="muyu">
           <span class="stall-icon" aria-hidden="true">🪵</span>

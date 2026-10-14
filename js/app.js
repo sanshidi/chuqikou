@@ -415,17 +415,12 @@
 
   /* —— Game hub —— */
   const META = {
-    bag: { title: "出气袋", hint: "连点或按住节奏砸，把劲儿打出去。" },
+    bag: { title: "出气袋", hint: "连点出气，把劲儿打出去。" },
     bubble: { title: "泡泡膜", hint: "一格格戳破。全破完可以再来一局。" },
-    plates: { title: "砸盘子", hint: "点盘子就碎。碎片会飞开。" },
-    balloons: { title: "气球扎破", hint: "戳浮起来的气球。漏网的会飘走。" },
-    rage: { title: "键盘宣泄", hint: "狂按任意键（或猛点屏幕）填满怒气条，再释放。" },
+    plates: { title: "砸盘子", hint: "点盘子就碎，碎片会飞开。" },
+    rage: { title: "键盘宣泄", hint: "狂按键盘或猛点屏幕，填满怒气条再释放。" },
     squeeze: { title: "捏压力球", hint: "按住捏扁，松开弹回。多捏几下。" },
-    shredder: { title: "碎纸机", hint: "在框里打字或拖文字进来，点粉碎。" },
-    whack: { title: "消火", hint: "火苗冒出来就戳灭。别让它们堆满。" },
-    notes: { title: "甩飞便签", hint: "按住便签快速甩出屏幕外。" },
-    breakout: { title: "碎砖块", hint: "拖挡板接住球，打掉烦恼砖。" },
-    muyu: { title: "敲木鱼", hint: "点一下木鱼，听一声轻响。不用赶，跟着自己的节奏就好。" },
+    muyu: { title: "敲木鱼", hint: "点一下听一声。不用赶，跟着自己的节奏。" },
   };
 
   function closeGame() {
