@@ -43,8 +43,18 @@
     peakRate = Math.max(peakRate, mashTimes.length);
   }
 
+  const MAX_LETTERS = 28;
+  let letterAlive = 0;
+
   function spawnLetter(ch, x, y, wild) {
     if (V.reducedMotion()) return;
+    if (letterAlive >= MAX_LETTERS) {
+      const oldEl = mashZone.querySelector(".rage-letter");
+      if (oldEl) {
+        try { oldEl.remove(); } catch (_) {}
+        letterAlive = Math.max(0, letterAlive - 1);
+      } else return;
+    }
     const el = document.createElement("span");
     el.className = "rage-letter";
     el.textContent = ch;
@@ -58,8 +68,10 @@
     el.style.setProperty("--ly", (-80 - Math.random() * 100).toFixed(0) + "px");
     el.style.setProperty("--lr", (Math.random() * 80 - 40).toFixed(0) + "deg");
     mashZone.appendChild(el);
+    letterAlive++;
     setTimeout(() => {
       try { el.remove(); } catch (_) {}
+      letterAlive = Math.max(0, letterAlive - 1);
     }, 800);
   }
 
@@ -120,17 +132,18 @@
     V.playCrack(true);
     V.vibeHit("burst");
     V.screenShake(stage, 3.0, 12);
-    V.hitStop(40);
+    V.hitStop(26);
     V.impactFlash(stage, { heavy: true, chromatic: true });
     V.createParticleBurst(stage, stage.clientWidth / 2, stage.clientHeight / 2, {
-      count: 48,
+      count: 24,
       dist: 140,
       star: true,
       big: true,
       colors: ["#ff3d7f", "#ffe566", "#5ce1e6", "#f4e8d8", "#fff"],
       ms: 1000,
     });
-    for (let i = 0; i < 22; i++) {
+    const letterN = (V.getJuiceQuality && V.getJuiceQuality() <= 1) ? 8 : 14;
+    for (let i = 0; i < letterN; i++) {
       setTimeout(() => {
         spawnLetter(WORDS[i % WORDS.length], randIn(mashZone.clientWidth), randIn(mashZone.clientHeight), true);
       }, i * 28);

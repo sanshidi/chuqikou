@@ -30,16 +30,39 @@
     return a + Math.random() * (b - a);
   }
 
+  const MAX_PARTICLES = 80;
+  let alivePlates = 0;
+
   function resize() {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const nextDpr = Math.min(2, window.devicePixelRatio || 1);
     const r = arena.getBoundingClientRect();
-    w = r.width;
-    h = r.height;
+    const nw = r.width;
+    const nh = r.height;
+    if (nw === w && nh === h && nextDpr === dpr && canvas.width) return;
+    dpr = nextDpr;
+    w = nw;
+    h = nh;
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function pushParticle(obj) {
+    if (particles.length >= MAX_PARTICLES) {
+      // drop oldest dust first, else shift
+      let dropped = false;
+      for (let i = 0; i < particles.length; i++) {
+        if (particles[i].dust) {
+          particles.splice(i, 1);
+          dropped = true;
+          break;
+        }
+      }
+      if (!dropped) particles.shift();
+    }
+    particles.push(obj);
   }
 
   function spawnPlate(fromTop) {
@@ -62,11 +85,13 @@
   }
 
   function shatter(p, combo) {
-    const shardN = Math.min(64, 22 + (combo || 1) * 4 + (p.boss ? 24 : 0));
+    const q = V.getJuiceQuality ? V.getJuiceQuality() : 3;
+    const cap = q <= 1 ? 18 : q === 2 ? 28 : 36;
+    const shardN = Math.min(cap, 14 + (combo || 1) * 2 + (p.boss ? 12 : 0));
     for (let i = 0; i < shardN; i++) {
       const ang = rand(0, Math.PI * 2);
       const sp = rand(3.2, 11) * (p.boss ? 1.45 : 1.15);
-      particles.push({
+      pushParticle({
         x: p.x,
         y: p.y,
         vx: Math.cos(ang) * sp,
@@ -91,12 +116,13 @@
       V.playCrack(false);
       V.vibeHit("hit");
       V.screenShake(stage, 1.1, 2);
-      V.hitStop(22);
+      V.hitStop(18);
       V.impactFlash(stage, {});
       V.spawnFloatingText(stage, "裂纹!", p.x, p.y, { px: true });
-      for (let i = 0; i < 12; i++) {
+      const dustN = (V.getJuiceQuality && V.getJuiceQuality() <= 1) ? 4 : 8;
+      for (let i = 0; i < dustN; i++) {
         const ang = rand(0, Math.PI * 2);
-        particles.push({
+        pushParticle({
           x: p.x, y: p.y,
           vx: Math.cos(ang) * rand(1.5, 4),
           vy: Math.sin(ang) * rand(1.5, 4),
@@ -114,11 +140,11 @@
     if (p.boss) {
       V.playBurst();
       V.vibeHit("boss");
-      V.hitStop(40);
+      V.hitStop(26);
       V.impactFlash(stage, { heavy: true, chromatic: true });
     } else {
       V.vibeHit(st.combo >= 5 ? "heavy" : "hit");
-      V.hitStop(st.combo >= 6 ? 32 : 22);
+      V.hitStop(st.combo >= 6 ? 24 : 16);
       V.impactFlash(stage, { heavy: st.combo >= 6, chromatic: st.combo >= 8 });
     }
     camPunch = p.boss ? 14 : 7 + Math.min(6, st.combo * 0.5);
@@ -126,7 +152,7 @@
     const label = p.boss ? "大盘粉碎 +" + (24 + st.combo) : "+" + (6 + Math.min(18, st.combo));
     V.spawnFloatingText(stage, label, p.x, p.y, { px: true, critical: !!p.boss || st.combo >= 7 });
     V.createParticleBurst(stage, p.x, p.y, {
-      count: p.boss ? 32 : 14,
+      count: p.boss ? 20 : 10,
       big: true,
       star: !!p.boss,
       dist: p.boss ? 100 : 55,
@@ -177,39 +203,55 @@
     if (!running) return;
     const dt = Math.min(32, t - last);
     last = t;
-    spawnAcc += dt;
-    if (plates.filter((p) => p.alive).length < 7 && spawnAcc > 700) {
-      spawnAcc = 0;
-      plates.push(spawnPlate(Math.random() < 0.55));
+    const freezing = V.isHitStopping && V.isHitStopping();
+    spawnAcc += freezing ? 0 : dt;
+    // recount occasionally via spawn path
+    if (!freezing) {
+      let live = 0;
+      for (let i = 0; i < plates.length; i++) if (plates[i].alive) live++;
+      alivePlates = live;
+      if (alivePlates < 7 && spawnAcc > 700) {
+        spawnAcc = 0;
+        plates.push(spawnPlate(Math.random() < 0.55));
+        // compact dead plates when array grows
+        if (plates.length > 24) plates = plates.filter((p) => p.alive);
+      }
     }
 
     ctx.save();
-    if (camPunch > 0.2) {
+    if (!freezing && camPunch > 0.2) {
       const ox = (Math.random() - 0.5) * camPunch;
       const oy = (Math.random() - 0.5) * camPunch;
       ctx.translate(ox, oy);
       camPunch *= 0.82;
+    } else if (freezing) {
+      /* hold camera during hit-stop */
     } else camPunch = 0;
     ctx.clearRect(-20, -20, w + 40, h + 40);
 
+    const step = freezing ? 0 : dt / 16;
     for (const p of plates) {
       if (!p.alive) continue;
-      p.x += p.vx * (dt / 16);
-      p.y += p.vy * (dt / 16);
-      p.rot += p.vr * (dt / 16);
-      if (p.x < p.r) { p.x = p.r; p.vx *= -1; }
-      if (p.x > w - p.r) { p.x = w - p.r; p.vx *= -1; }
-      if (p.y > h + p.r + 40) p.alive = false;
-      drawPlate(p);
+      if (step) {
+        p.x += p.vx * step;
+        p.y += p.vy * step;
+        p.rot += p.vr * step;
+        if (p.x < p.r) { p.x = p.r; p.vx *= -1; }
+        if (p.x > w - p.r) { p.x = w - p.r; p.vx *= -1; }
+        if (p.y > h + p.r + 40) p.alive = false;
+      }
+      if (p.alive) drawPlate(p);
     }
 
     for (let i = particles.length - 1; i >= 0; i--) {
       const q = particles[i];
-      q.x += q.vx;
-      q.y += q.vy;
-      q.vy += 0.3;
-      q.rot += q.vr;
-      q.life -= q.dust ? 0.045 : 0.026;
+      if (!freezing) {
+        q.x += q.vx;
+        q.y += q.vy;
+        q.vy += 0.3;
+        q.rot += q.vr;
+        q.life -= q.dust ? 0.045 : 0.026;
+      }
       if (q.life <= 0) {
         particles.splice(i, 1);
         continue;

@@ -165,7 +165,7 @@
         popBubble(b, 0.85 + (i % 8) * 0.06);
         const r = b.getBoundingClientRect();
         const sr = stage.getBoundingClientRect();
-        if (i % 3 === 0) {
+        if (i % 5 === 0) {
           V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
             count: 8,
             dist: 36,

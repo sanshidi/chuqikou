@@ -97,7 +97,7 @@
       critical: crit,
     });
     V.createParticleBurst(stage, lx, ly, {
-      count: crit ? 28 : 16,
+      count: crit ? 18 : 10,
       star: true,
       big: true,
       colors: crit ? ["#ff3d7f", "#ffe566", "#fff", "#5ce1e6"] : ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8"],
@@ -105,7 +105,7 @@
     });
     V.screenShake(stage, 0.9 + pow * 0.75, st.combo);
     if (crit || pow >= 1.5) {
-      V.hitStop(crit ? 36 : 24);
+      V.hitStop(crit ? 24 : 16);
       V.impactFlash(stage, { heavy: crit, chromatic: crit });
     } else if (pow >= 1.1) {
       V.impactFlash(stage, {});

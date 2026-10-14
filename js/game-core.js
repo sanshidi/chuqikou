@@ -647,9 +647,110 @@
     }
   }
 
-  /* —— Visual juice —— */
+  /* —— Visual juice (perf-capped) —— */
+  /** 0=off/reduced, 1=low, 2=med, 3=high */
+  let juiceQuality = reducedMotion ? 0 : 3;
+  let juiceAlive = 0;
+  let floatAlive = 0;
+  let shockAlive = 0;
+  let lastShakeAt = 0;
+  let shakeTimer = 0;
+  let shakePending = null;
+  let hitStopUntil = 0;
+  let hitStopTimer = 0;
+  let lastFlashAt = 0;
+  let lastVibeAt = 0;
+  let frameEma = 16.7;
+  let lastFrameTs = 0;
+  let qualityWatchStarted = false;
+  const particlePool = [];
+  const flashByParent = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+  const MAX_PARTICLES_HIGH = 64;
+  const MAX_PARTICLES_MED = 40;
+  const MAX_PARTICLES_LOW = 24;
+  const MAX_FLOAT = 12;
+  const MAX_SHOCK = 3;
+
+  function maxParticles() {
+    if (juiceQuality <= 0) return 0;
+    if (juiceQuality === 1) return MAX_PARTICLES_LOW;
+    if (juiceQuality === 2) return MAX_PARTICLES_MED;
+    return MAX_PARTICLES_HIGH;
+  }
+
+  function particleBudget() {
+    return Math.max(0, maxParticles() - juiceAlive);
+  }
+
+  function startQualityWatch() {
+    if (qualityWatchStarted || reducedMotion) return;
+    if (typeof requestAnimationFrame !== "function") return;
+    qualityWatchStarted = true;
+    function tick(ts) {
+      if (lastFrameTs) {
+        const dt = ts - lastFrameTs;
+        if (dt > 0 && dt < 120) {
+          frameEma = frameEma * 0.9 + dt * 0.1;
+          if (frameEma > 28 && juiceQuality > 1) juiceQuality = 1;
+          else if (frameEma > 22 && juiceQuality > 2) juiceQuality = 2;
+          else if (frameEma < 17.5 && juiceQuality < 3) juiceQuality = Math.min(3, juiceQuality + 1);
+        }
+      }
+      lastFrameTs = ts;
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  try {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", startQualityWatch);
+    } else {
+      startQualityWatch();
+    }
+  } catch (_) {}
+
+  function acquireDot() {
+    let p = particlePool.pop();
+    if (!p) {
+      p = document.createElement("span");
+    }
+    return p;
+  }
+
+  function releaseDot(p) {
+    try {
+      if (p.parentNode) p.parentNode.removeChild(p);
+    } catch (_) {}
+    p.className = "";
+    p.removeAttribute("style");
+    if (particlePool.length < 96) particlePool.push(p);
+  }
+
+  function pruneOldestBurst(parent) {
+    if (!parent) return;
+    const bursts = parent.querySelectorAll(".particle-burst");
+    if (!bursts.length) return;
+    const oldest = bursts[0];
+    const dots = oldest.querySelectorAll(".particle-dot");
+    juiceAlive = Math.max(0, juiceAlive - dots.length);
+    dots.forEach(releaseDot);
+    try {
+      oldest.remove();
+    } catch (_) {}
+  }
+
   function spawnFloatingText(parent, text, x, y, opts) {
     if (!parent) return;
+    if (juiceQuality <= 0 && !reducedMotion) return;
+    if (floatAlive >= MAX_FLOAT) {
+      const old = parent.querySelector(".float-dmg");
+      if (old) {
+        try {
+          old.remove();
+        } catch (_) {}
+        floatAlive = Math.max(0, floatAlive - 1);
+      }
+    }
     const o = opts || {};
     const el = document.createElement("span");
     el.className = "float-dmg" + (o.critical ? " is-crit" : "") + (o.calm ? " is-calm" : "");
@@ -667,52 +768,120 @@
     }
     if (o.color) el.style.color = o.color;
     parent.appendChild(el);
+    floatAlive++;
     setTimeout(() => {
       try {
         el.remove();
       } catch (_) {}
+      floatAlive = Math.max(0, floatAlive - 1);
     }, o.ms || 900);
   }
 
-  function screenShake(el, intensity, combo) {
-    if (!el || reducedMotion) return;
+  function applyShake(el, intensity, combo) {
     const cBoost = combo ? Math.min(1.4, 0.35 + combo * 0.08) : 0;
     const i = Math.max(0.4, Math.min(3.5, (intensity == null ? 1 : intensity) + cBoost));
-    el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
-    void el.offsetWidth;
     const cls = i >= 2.2 ? "is-shake-mega" : i >= 1.2 ? "is-shake-hard" : "is-shake";
+    const now = performance.now();
+    // Coalesce: if already shaking hard enough, just bump amp — avoid layout thrash
+    if (now - lastShakeAt < 48 && (el.classList.contains("is-shake") || el.classList.contains("is-shake-hard") || el.classList.contains("is-shake-mega"))) {
+      el.style.setProperty("--shake-amp", (6 * i).toFixed(1) + "px");
+      if (cls === "is-shake-mega" && !el.classList.contains("is-shake-mega")) {
+        el.classList.remove("is-shake", "is-shake-hard");
+        el.classList.add("is-shake-mega");
+      } else if (cls === "is-shake-hard" && el.classList.contains("is-shake")) {
+        el.classList.remove("is-shake");
+        el.classList.add("is-shake-hard");
+      }
+      clearTimeout(shakeTimer);
+      shakeTimer = setTimeout(() => {
+        el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
+      }, i >= 2.2 ? 300 : i >= 1.2 ? 220 : 150);
+      lastShakeAt = now;
+      return;
+    }
+    el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
+    // One reflow only when restarting the CSS animation
+    void el.offsetWidth;
     el.classList.add(cls);
     el.style.setProperty("--shake-amp", (6 * i).toFixed(1) + "px");
-    setTimeout(() => {
+    clearTimeout(shakeTimer);
+    shakeTimer = setTimeout(() => {
       el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
-    }, i >= 2.2 ? 320 : i >= 1.2 ? 240 : 160);
+    }, i >= 2.2 ? 300 : i >= 1.2 ? 220 : 150);
+    lastShakeAt = now;
   }
 
-  /** Brief freeze-frame hit-stop (20–40ms typical). */
+  function screenShake(el, intensity, combo) {
+    if (!el || juiceQuality <= 0) return;
+    if (juiceQuality === 1 && (intensity == null ? 1 : intensity) < 0.9) return;
+    // Coalesce multiple shakes in the same frame to one apply
+    if (shakePending) {
+      shakePending.intensity = Math.max(shakePending.intensity, intensity == null ? 1 : intensity);
+      shakePending.combo = Math.max(shakePending.combo || 0, combo || 0);
+      return;
+    }
+    shakePending = { el: el, intensity: intensity == null ? 1 : intensity, combo: combo || 0 };
+    requestAnimationFrame(() => {
+      const p = shakePending;
+      shakePending = null;
+      if (p) applyShake(p.el, p.intensity, p.combo);
+    });
+  }
+
+  /**
+   * Brief hit-stop. Caps ≤28ms, single timer, no busy-wait.
+   * Uses a flag for canvas loops; CSS only dims stage (does NOT pause every descendant).
+   */
   function hitStop(ms) {
-    if (reducedMotion) return;
-    const dur = Math.max(12, Math.min(48, ms == null ? 28 : ms));
+    if (juiceQuality <= 0) return;
+    if (juiceQuality === 1) ms = Math.min(ms == null ? 16 : ms, 16);
+    const dur = Math.max(10, Math.min(28, ms == null ? 20 : ms));
+    const until = performance.now() + dur;
+    if (until <= hitStopUntil + 2) return;
+    hitStopUntil = until;
     const root = document.documentElement;
     root.classList.add("is-hitstop");
-    setTimeout(() => root.classList.remove("is-hitstop"), dur);
+    clearTimeout(hitStopTimer);
+    hitStopTimer = setTimeout(() => {
+      root.classList.remove("is-hitstop");
+    }, dur);
   }
 
-  /** White / chromatic impact flash overlay on stage. */
+  function isHitStopping() {
+    return performance.now() < hitStopUntil;
+  }
+
+  /** Single reusable flash overlay per parent; throttled. */
   function impactFlash(parent, opts) {
-    if (!parent || reducedMotion) return;
+    if (!parent || juiceQuality <= 0) return;
+    const now = performance.now();
+    if (now - lastFlashAt < (juiceQuality <= 1 ? 90 : 50)) return;
+    lastFlashAt = now;
     const o = opts || {};
-    const flash = document.createElement("div");
-    flash.className = "impact-flash" + (o.heavy ? " is-heavy" : "") + (o.chromatic ? " is-chromatic" : "");
-    parent.appendChild(flash);
-    setTimeout(() => {
-      try { flash.remove(); } catch (_) {}
+    let flash = flashByParent ? flashByParent.get(parent) : null;
+    if (!flash || !flash.isConnected) {
+      flash = document.createElement("div");
+      parent.appendChild(flash);
+      if (flashByParent) flashByParent.set(parent, flash);
+    }
+    flash.className = "impact-flash" + (o.heavy ? " is-heavy" : "") + (o.chromatic && juiceQuality >= 2 ? " is-chromatic" : "");
+    // Restart CSS animation without stacking nodes
+    flash.style.animation = "none";
+    void flash.offsetWidth;
+    flash.style.animation = "";
+    clearTimeout(flash._ventTimer);
+    flash._ventTimer = setTimeout(() => {
+      flash.className = "impact-flash is-idle";
     }, o.ms || 180);
   }
 
-  /** Combo-aware vibrate: longer patterns on big hits. */
+  /** Combo-aware vibrate: longer patterns on big hits; lightly throttled. */
   function vibeHit(kind) {
     try {
       if (!navigator.vibrate) return;
+      const now = performance.now();
+      if (now - lastVibeAt < 28 && kind !== "burst" && kind !== "boss") return;
+      lastVibeAt = now;
       const patterns = {
         light: 10,
         tap: 14,
@@ -727,19 +896,30 @@
   }
 
   function createParticleBurst(parent, x, y, opts) {
-    if (!parent || reducedMotion) return;
+    if (!parent || juiceQuality <= 0) return;
     const o = opts || {};
-    const n = o.count || 18;
+    let want = o.count || 18;
+    if (juiceQuality === 1) want = Math.min(want, 8);
+    else if (juiceQuality === 2) want = Math.min(want, 16);
+    else want = Math.min(want, 28);
+    let budget = particleBudget();
+    while (budget < Math.min(6, want) && juiceAlive > 0) {
+      pruneOldestBurst(parent);
+      budget = particleBudget();
+    }
+    const n = Math.min(want, budget);
+    if (n <= 0) return;
     const colors = o.colors || ["#5ce1e6", "#ff3d7f", "#ffe566", "#f4e8d8"];
     const layer = document.createElement("div");
     layer.className = "particle-burst";
     layer.style.left = x + "px";
     layer.style.top = y + "px";
     parent.appendChild(layer);
+    const big = juiceQuality >= 2 && (o.big || o.star);
+    const useStar = juiceQuality >= 2 && o.star;
     for (let i = 0; i < n; i++) {
-      const p = document.createElement("span");
-      const big = o.big || o.star;
-      p.className = "particle-dot" + (o.star ? " is-star" : "") + (big ? " is-big" : "");
+      const p = acquireDot();
+      p.className = "particle-dot" + (useStar ? " is-star" : "") + (big ? " is-big" : "");
       const ang = (Math.PI * 2 * i) / n + Math.random() * 0.45;
       const dist = (o.dist || 72) * (0.5 + Math.random() * 0.75);
       p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
@@ -753,27 +933,39 @@
       }
       layer.appendChild(p);
     }
+    juiceAlive += n;
+    const life = o.ms || 650;
     setTimeout(() => {
+      const dots = layer.querySelectorAll(".particle-dot");
+      juiceAlive = Math.max(0, juiceAlive - dots.length);
+      dots.forEach(releaseDot);
       try {
         layer.remove();
       } catch (_) {}
-    }, o.ms || 750);
+    }, life);
   }
 
   function createShockwave(parent, x, y) {
-    if (!parent || reducedMotion) return;
+    if (!parent || juiceQuality <= 0) return;
+    if (shockAlive >= MAX_SHOCK) return;
+    if (juiceQuality === 1) return;
     const ring = document.createElement("div");
     ring.className = "shockwave-ring";
     ring.style.left = x + "px";
     ring.style.top = y + "px";
     parent.appendChild(ring);
+    shockAlive++;
     setTimeout(() => {
       try {
         ring.remove();
       } catch (_) {}
-    }, 600);
+      shockAlive = Math.max(0, shockAlive - 1);
+    }, 550);
   }
 
+  function getJuiceQuality() {
+    return juiceQuality;
+  }
 
   /* —— Zoom guards (iOS / WeChat / Chrome) —— */
   (function blockPinchZoom() {
@@ -998,7 +1190,10 @@
 
   // Auto-wire test button when present
   function autoBindTest() {
-    bindTestSfxButton(document.getElementById("testSfxBtn"));
+    try {
+      const btn = document.getElementById && document.getElementById("testSfxBtn");
+      if (btn) bindTestSfxButton(btn);
+    } catch (_) {}
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", autoBindTest);
@@ -1032,10 +1227,12 @@
     spawnFloatingText,
     screenShake,
     hitStop,
+    isHitStopping,
     impactFlash,
     vibeHit,
     createParticleBurst,
     createShockwave,
+    getJuiceQuality,
     setMuted,
     isMuted,
     bindMuteButton,

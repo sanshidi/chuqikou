@@ -265,11 +265,20 @@ html, body {
   85% { transform: translate(7px, -2px) rotate(0.2deg); }
 }
 
+/* Hit-stop: brief freeze feel WITHOUT pausing every descendant animation
+   (pausing * caused main-thread stalls when hundreds of particle-dots existed). */
 html.is-hitstop .game-stage-full {
+  filter: brightness(1.08) contrast(1.06);
+}
+html.is-hitstop .game-stage-full.is-shake,
+html.is-hitstop .game-stage-full.is-shake-hard,
+html.is-hitstop .game-stage-full.is-shake-mega {
   animation-play-state: paused !important;
 }
-html.is-hitstop .game-stage-full * {
-  animation-play-state: paused !important;
+.impact-flash.is-idle {
+  opacity: 0;
+  animation: none;
+  pointer-events: none;
 }
 
 .impact-flash {

@@ -86,12 +86,12 @@
     V.playCrack(false);
     V.vibeHit("burst");
     V.screenShake(stage, 2.4, 8);
-    V.hitStop(36);
+    V.hitStop(24);
     V.impactFlash(stage, { heavy: true, chromatic: true });
     const r = ball.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
     V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-      count: 40,
+      count: 22,
       dist: 120,
       colors: ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8", "#fff"],
       star: true,

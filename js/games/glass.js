@@ -31,11 +31,18 @@
     return a + Math.random() * (b - a);
   }
 
+  const MAX_SHARDS = 70;
+  const MAX_CRACKS = 24;
+
   function resize() {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const nextDpr = Math.min(2, window.devicePixelRatio || 1);
     const r = arena.getBoundingClientRect();
-    w = r.width;
-    h = r.height;
+    const nw = r.width;
+    const nh = r.height;
+    if (nw === w && nh === h && nextDpr === dpr && canvas.width) return;
+    dpr = nextDpr;
+    w = nw;
+    h = nh;
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
     canvas.style.width = w + "px";
@@ -70,12 +77,16 @@
       }
       segs.push(pts);
     }
+    if (cracks.length >= MAX_CRACKS) cracks.shift();
     cracks.push({ segs: segs, life: 1, x: x, y: y, grow: 0 });
   }
 
   function spawnShards(x, y, n, combo) {
-    const count = n + Math.min(20, (combo || 0) * 2);
+    const q = V.getJuiceQuality ? V.getJuiceQuality() : 3;
+    const softCap = q <= 1 ? 12 : q === 2 ? 20 : 28;
+    const count = Math.min(softCap, n + Math.min(10, (combo || 0)));
     for (let i = 0; i < count; i++) {
+      if (shards.length >= MAX_SHARDS) shards.shift();
       const ang = rand(0, Math.PI * 2);
       const sp = rand(2, 9);
       shards.push({
@@ -106,14 +117,14 @@
     V.playThud(0.7 + Math.min(1.2, st.combo * 0.1));
     V.vibeHit(st.combo >= 6 ? "heavy" : "hit");
     V.screenShake(stage, 1.0 + Math.min(1.5, st.combo / 7), st.combo);
-    V.hitStop(st.combo >= 5 ? 30 : 20);
+    V.hitStop(st.combo >= 5 ? 22 : 14);
     V.impactFlash(stage, { heavy: st.combo >= 7, chromatic: st.combo >= 8 });
     V.spawnFloatingText(stage, st.combo >= 6 ? "粉碎 +" + st.combo : "咔 +" + (4 + st.combo), x, y, {
       px: true,
       critical: st.combo >= 7,
     });
     V.createParticleBurst(stage, x, y, {
-      count: 12 + Math.min(16, st.combo),
+      count: 8 + Math.min(8, st.combo),
       dist: 50 + st.combo * 4,
       big: true,
       colors: ["#c8e8ff", "#5ce1e6", "#f4e8d8", "#fff"],
@@ -122,8 +133,9 @@
     if (hits >= 12 && !broken) {
       broken = true;
       // big shatter cascade
-      for (let i = 0; i < 8; i++) {
-        spawnShards(rand(w * 0.15, w * 0.85), rand(h * 0.15, h * 0.85), 8, st.combo);
+      const cascade = (V.getJuiceQuality && V.getJuiceQuality() <= 1) ? 3 : 5;
+      for (let i = 0; i < cascade; i++) {
+        spawnShards(rand(w * 0.15, w * 0.85), rand(h * 0.15, h * 0.85), 6, st.combo);
       }
       V.playBurst();
       V.vibeHit("burst");
@@ -145,13 +157,14 @@
   }
 
   function draw() {
+    const freezing = V.isHitStopping && V.isHitStopping();
     ctx.clearRect(0, 0, w, h);
     // glass sheen
     ctx.fillStyle = "rgba(180, 210, 240, 0.06)";
     ctx.fillRect(0, 0, w, h);
 
     for (const c of cracks) {
-      c.grow = Math.min(1, c.grow + 0.08);
+      if (!freezing) c.grow = Math.min(1, c.grow + 0.08);
       ctx.strokeStyle = "rgba(220, 235, 255, " + (0.55 + c.life * 0.35) + ")";
       ctx.lineWidth = 1.6;
       ctx.lineJoin = "round";
@@ -171,11 +184,13 @@
 
     for (let i = shards.length - 1; i >= 0; i--) {
       const s = shards[i];
-      s.x += s.vx;
-      s.y += s.vy;
-      s.vy += 0.32;
-      s.rot += s.vr;
-      s.life -= 0.018;
+      if (!freezing) {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.32;
+        s.rot += s.vr;
+        s.life -= 0.018;
+      }
       if (s.life <= 0) {
         shards.splice(i, 1);
         continue;

@@ -62,11 +62,23 @@
   }
   updateHud();
 
+  const MAX_RIP_SHARDS = 16;
+  let ripShardAlive = 0;
+
   function spawnShards(progress) {
+    if (V.reducedMotion && V.reducedMotion()) return;
     const r = wrap.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
-    const n = 8 + Math.floor(progress * 10);
+    const q = V.getJuiceQuality ? V.getJuiceQuality() : 3;
+    const n = Math.min(q <= 1 ? 6 : 12, 6 + Math.floor(progress * 6));
     for (let i = 0; i < n; i++) {
+      if (ripShardAlive >= MAX_RIP_SHARDS) {
+        const oldEl = stage.querySelector(".rip-shard");
+        if (oldEl) {
+          try { oldEl.remove(); } catch (_) {}
+          ripShardAlive = Math.max(0, ripShardAlive - 1);
+        } else break;
+      }
       const el = document.createElement("div");
       el.className = "rip-shard";
       const w = 28 + Math.random() * 40;
@@ -80,8 +92,10 @@
       el.style.setProperty("--rr", (Math.random() * 80 - 40).toFixed(0) + "deg");
       el.textContent = "撕";
       stage.appendChild(el);
+      ripShardAlive++;
       setTimeout(() => {
         try { el.remove(); } catch (_) {}
+        ripShardAlive = Math.max(0, ripShardAlive - 1);
       }, 750);
     }
   }
@@ -94,7 +108,7 @@
     V.playBurst();
     V.vibeHit("burst");
     V.screenShake(stage, 2.2, st.combo);
-    V.hitStop(36);
+    V.hitStop(24);
     V.impactFlash(stage, { heavy: true, chromatic: true });
     spawnShards(1);
     const r = wrap.getBoundingClientRect();
@@ -104,7 +118,7 @@
       critical: true,
     });
     V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-      count: 28,
+      count: 18,
       big: true,
       star: true,
       dist: 100,

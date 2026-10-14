@@ -113,13 +113,17 @@ const code = fs.readFileSync(path.join(ROOT, "js/game-core.js"), "utf8");
 const sandbox = {
   window: {},
   document: {
+    readyState: "complete",
     addEventListener() {},
+    getElementById() { return null; },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
     elementFromPoint() {
       return null;
     },
     visibilityState: "visible",
-    body: { appendChild() {}, remove() {} },
-    documentElement: { appendChild() {} },
+    body: { appendChild() {}, remove() {}, setAttribute() {}, getAttribute() { return null; } },
+    documentElement: { appendChild() {}, classList: { add() {}, remove() {}, contains() { return false; } } },
     createElement() {
       return {
         type: "",
