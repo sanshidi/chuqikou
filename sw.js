@@ -1,5 +1,5 @@
 /* 出气口 — offline cache, local-only app shell */
-const CACHE = 'chuqikou-v10';
+const CACHE = 'chuqikou-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -32,7 +32,15 @@ const ASSETS = [
   './games/rip.html',
   './manifest.webmanifest',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './audio/thud.wav',
+  './audio/whoosh.wav',
+  './audio/pop.wav',
+  './audio/crack.wav',
+  './audio/burst.wav',
+  './audio/tick.wav',
+  './audio/wood.wav',
+  './audio/splat.wav'
 ];
 
 self.addEventListener('install', (e) => {
@@ -54,7 +62,7 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
 
   // JS/CSS/HTML: network-first so Pages deploys are not stuck on old SW cache
-  const netFirst = /\.(js|css|html|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/');
+  const netFirst = /\.(js|css|html|webmanifest|wav|mp3|ogg)$/.test(url.pathname) || url.pathname.endsWith('/') || url.pathname.includes('/audio/');
   if (netFirst) {
     e.respondWith(
       fetch(req)

@@ -174,6 +174,115 @@
     return peak;
   }
 
+  /* —— Sample packs (punch/impact WAV under audio/) —— */
+  const SAMPLE_KINDS = ["thud", "whoosh", "pop", "crack", "burst", "tick", "wood", "splat"];
+  const sampleBuffers = Object.create(null);
+  const sampleUrls = Object.create(null);
+  let samplesLoadPromise = null;
+
+  function sfxBaseUrl() {
+    try {
+      const scripts = document.getElementsByTagName("script");
+      for (let i = scripts.length - 1; i >= 0; i--) {
+        const src = scripts[i] && scripts[i].src;
+        if (src && /game-core\.js(\?|$)/.test(src)) {
+          return src.replace(/js\/game-core\.js(\?.*)?$/, "audio/");
+        }
+      }
+    } catch (_) {}
+    try {
+      if (/\/games\//.test(location.pathname || "")) return "../audio/";
+    } catch (_) {}
+    return "audio/";
+  }
+
+  function sampleUrl(kind) {
+    const k = kind === "beep" ? "thud" : kind || "thud";
+    if (sampleUrls[k]) return sampleUrls[k];
+    const url = sfxBaseUrl() + k + ".wav";
+    sampleUrls[k] = url;
+    return url;
+  }
+
+  function preloadSamples() {
+    if (samplesLoadPromise) return samplesLoadPromise;
+    if (typeof fetch !== "function") {
+      samplesLoadPromise = Promise.resolve(sampleBuffers);
+      return samplesLoadPromise;
+    }
+    const ctx = ensureAudio();
+    samplesLoadPromise = Promise.all(
+      SAMPLE_KINDS.map((kind) => {
+        const url = sampleUrl(kind);
+        return fetch(url)
+          .then((r) => {
+            if (!r || !r.ok) throw new Error("sfx " + kind);
+            return r.arrayBuffer();
+          })
+          .then((ab) => {
+            if (!ctx || typeof ctx.decodeAudioData !== "function") return null;
+            return new Promise((resolve, reject) => {
+              let settled = false;
+              const ok = (buf) => {
+                if (!settled) {
+                  settled = true;
+                  resolve(buf);
+                }
+              };
+              const fail = (e) => {
+                if (!settled) {
+                  settled = true;
+                  reject(e);
+                }
+              };
+              try {
+                const p = ctx.decodeAudioData(ab.slice(0), ok, fail);
+                if (p && typeof p.then === "function") p.then(ok, fail);
+              } catch (e) {
+                fail(e);
+              }
+            });
+          })
+          .then((buf) => {
+            if (buf) sampleBuffers[kind] = buf;
+            return kind;
+          })
+          .catch(() => null);
+      })
+    ).then(() => sampleBuffers);
+    return samplesLoadPromise;
+  }
+
+  function playSampleBuf(ctx, t, buffer, opts) {
+    const o = opts || {};
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const rate = o.rate == null ? 1 : o.rate;
+    try {
+      src.playbackRate.value = Math.max(0.55, Math.min(2.1, rate));
+    } catch (_) {}
+    const gain = ctx.createGain();
+    const peak = Math.max(0.0001, o.gain == null ? 0.95 : o.gain);
+    const dur = Math.max(0.05, ((buffer.duration || 0.2) / Math.max(0.55, rate)) * 0.98);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(gain);
+    gain.connect(outNode());
+    src.start(t);
+    try {
+      src.stop(t + dur + 0.04);
+    } catch (_) {}
+    return src;
+  }
+
+  function tryPlaySample(ctx, t, kind, opts) {
+    const buf = sampleBuffers[kind];
+    if (!buf) return false;
+    playSampleBuf(ctx, t, buf, opts);
+    return true;
+  }
+
   /* —— HTMLAudioElement fallback (WeChat / X5 when Web Audio flaky) —— */
   const htmlUriCache = Object.create(null);
   const htmlPool = Object.create(null);
@@ -221,32 +330,46 @@
     return "data:audio/wav;base64," + btoa(binary);
   }
 
+  /** Tiny synth clip only for silent unlock priming when files not yet ready. */
   function htmlUri(kind) {
     if (htmlUriCache[kind]) return htmlUriCache[kind];
     let uri;
-    if (kind === "beep") uri = makeWavDataUri(880, 0.22, 0.9, { decay: 8 });
-    else if (kind === "pop") uri = makeWavDataUri(720, 0.1, 0.75, { decay: 18, freq2: 240 });
-    else if (kind === "crack") uri = makeWavDataUri(1400, 0.12, 0.7, { decay: 22, noise: 0.55 });
-    else if (kind === "tick") uri = makeWavDataUri(980, 0.05, 0.45, { decay: 40 });
-    else if (kind === "wood") uri = makeWavDataUri(392, 0.35, 0.55, { decay: 6, freq2: 588 });
-    else uri = makeWavDataUri(90, 0.18, 0.95, { decay: 12, freq2: 180, noise: 0.25 }); // thud
+    if (kind === "tick") uri = makeWavDataUri(980, 0.05, 0.45, { decay: 40 });
+    else uri = makeWavDataUri(90, 0.12, 0.5, { decay: 14, noise: 0.2 });
     htmlUriCache[kind] = uri;
     return uri;
   }
 
-  function playHtmlSfx(kind) {
+  function playHtmlSfx(kind, opts) {
     if (muted) return;
+    const o = opts || {};
     try {
-      const key = kind || "thud";
+      const key = kind === "beep" ? "thud" : kind || "thud";
       let a = htmlPool[key];
       if (!a) {
-        a = new Audio(htmlUri(key));
+        a = new Audio(sampleUrl(key));
         a.preload = "auto";
         htmlPool[key] = a;
+        // warm decode; ignore errors (404 → synth data URI once)
+        a.addEventListener(
+          "error",
+          () => {
+            try {
+              a.src = htmlUri(key === "thud" ? "thud" : "tick");
+            } catch (_) {}
+          },
+          { once: true }
+        );
       }
       a.pause();
-      a.currentTime = 0;
-      a.volume = key === "beep" ? 1 : 0.92;
+      try {
+        a.currentTime = 0;
+      } catch (_) {}
+      const rate = o.rate == null ? 0.94 + Math.random() * 0.14 : o.rate;
+      try {
+        a.playbackRate = Math.max(0.6, Math.min(1.8, rate));
+      } catch (_) {}
+      a.volume = Math.max(0.05, Math.min(1, o.volume == null ? 0.95 : o.volume));
       const p = a.play();
       if (p && typeof p.catch === "function") p.catch(() => {});
     } catch (_) {}
@@ -271,6 +394,7 @@
   /**
    * Schedule Web Audio ONLY when ctx is running (fresh currentTime).
    * If suspended: HTMLAudio fallback immediately + resume().then(schedule).
+   * Prefers decoded sample buffers; synth only if sample missing.
    */
   function withAudio(scheduleFn, htmlKind) {
     if (muted) {
@@ -279,6 +403,7 @@
     }
     const ctx = ensureAudio();
     getMasterOut();
+    preloadSamples();
 
     const runWeb = () => {
       if (muted || !ctx || ctx.state !== "running") return false;
@@ -380,57 +505,38 @@
   }
 
   function playThud(intensity) {
+    const i = Math.max(0, Math.min(3, intensity == null ? 1 : intensity));
     withAudio((ctx, t) => {
-      const i = Math.max(0, Math.min(3, intensity == null ? 1 : intensity));
+      const rate = 0.88 + i * 0.06 + (Math.random() * 0.08 - 0.04);
+      const gain = 0.85 + i * 0.18;
+      if (tryPlaySample(ctx, t, "thud", { rate, gain })) return;
+      // synth fallback if sample not decoded yet
       const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const g = ctx.createGain();
       const filter = ctx.createBiquadFilter();
       osc.type = "sine";
       osc.frequency.setValueAtTime(95 + i * 40, t);
       osc.frequency.exponentialRampToValueAtTime(36, t + 0.16);
       filter.type = "lowpass";
       filter.frequency.value = 380;
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.62 + i * 0.22, t + 0.004);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.62 + i * 0.22, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
       osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(outNode());
+      filter.connect(g);
+      g.connect(outNode());
       osc.start(t);
       osc.stop(t + 0.22);
-      const mid = ctx.createOscillator();
-      const mg = ctx.createGain();
-      mid.type = "triangle";
-      mid.frequency.setValueAtTime(260 + i * 70, t);
-      mid.frequency.exponentialRampToValueAtTime(70, t + 0.055);
-      mg.gain.setValueAtTime(0.0001, t);
-      mg.gain.exponentialRampToValueAtTime(0.38 + i * 0.14, t + 0.002);
-      mg.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-      mid.connect(mg);
-      mg.connect(outNode());
-      mid.start(t);
-      mid.stop(t + 0.08);
-      noiseBurst(ctx, t, 0.045, {
-        freq: 1400 + i * 200,
-        type: "highpass",
-        Q: 0.7,
-        gain: 0.42 + i * 0.14,
-        decay: 0.08,
-      });
-      noiseBurst(ctx, t, 0.09, {
-        freq: 320 + i * 90,
-        type: "bandpass",
-        Q: 0.85,
-        gain: 0.4 + i * 0.12,
-        decay: 0.14,
-      });
+      noiseBurst(ctx, t, 0.05, { freq: 1400 + i * 200, type: "highpass", gain: 0.42 + i * 0.14, decay: 0.08 });
     }, "thud");
   }
 
   function playPop(pitch, loudness) {
+    const p = pitch == null ? 1 : pitch;
+    const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
     withAudio((ctx, t) => {
-      const p = pitch == null ? 1 : pitch;
-      const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
+      const rate = Math.max(0.65, Math.min(1.7, p * (0.95 + Math.random() * 0.12)));
+      if (tryPlaySample(ctx, t, "pop", { rate, gain: 0.7 * loud })) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
@@ -443,24 +549,14 @@
       gain.connect(outNode());
       osc.start(t);
       osc.stop(t + 0.12);
-      noiseBurst(ctx, t, 0.05, {
-        freq: 2200 * p,
-        type: "bandpass",
-        Q: 1.6,
-        gain: 0.38 * loud,
-        decay: 0.09,
-      });
-      noiseBurst(ctx, t, 0.07, {
-        freq: 420 * p,
-        type: "lowpass",
-        gain: 0.28 * loud,
-        decay: 0.16,
-      });
+      noiseBurst(ctx, t, 0.05, { freq: 2200 * p, type: "bandpass", Q: 1.6, gain: 0.38 * loud, decay: 0.09 });
     }, "pop");
   }
 
   function playWhoosh() {
     withAudio((ctx, t) => {
+      const rate = 0.9 + Math.random() * 0.2;
+      if (tryPlaySample(ctx, t, "whoosh", { rate, gain: 0.88 })) return;
       const bufferSize = Math.floor(ctx.sampleRate * 0.28);
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -481,32 +577,27 @@
       filter.connect(gain);
       gain.connect(outNode());
       src.start(t);
-    }, "thud");
+    }, "whoosh");
   }
 
   function playCrack(big) {
+    const scale = big ? 1.85 : 1.15;
     withAudio((ctx, t) => {
-      const scale = big ? 1.85 : 1.15;
+      const rate = (big ? 0.85 : 1.05) + Math.random() * 0.12;
+      if (tryPlaySample(ctx, t, "crack", { rate, gain: 0.75 * scale })) return;
       noiseBurst(ctx, t, 0.08, { freq: 3200, type: "highpass", gain: 0.62 * scale, decay: 0.08 });
       noiseBurst(ctx, t, 0.12, { freq: 1100, type: "bandpass", Q: 0.75, gain: 0.48 * scale, decay: 0.16 });
-      noiseBurst(ctx, t, 0.16, { freq: 280, type: "lowpass", gain: 0.36 * scale, decay: 0.22 });
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.setValueAtTime(big ? 1800 : 1300, t);
-      osc.frequency.exponentialRampToValueAtTime(280, t + 0.1);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.28 * scale, t + 0.002);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-      osc.connect(gain);
-      gain.connect(outNode());
-      osc.start(t);
-      osc.stop(t + 0.13);
     }, "crack");
   }
 
   function playBurst() {
+    let usedSample = false;
     withAudio((ctx, t) => {
+      if (tryPlaySample(ctx, t, "burst", { rate: 0.92 + Math.random() * 0.12, gain: 1.05 })) {
+        tryPlaySample(ctx, t + 0.02, "whoosh", { rate: 1.1, gain: 0.45 });
+        usedSample = true;
+        return;
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sawtooth";
@@ -518,52 +609,36 @@
       gain.connect(outNode());
       osc.start(t);
       osc.stop(t + 0.56);
-      const bass = ctx.createOscillator();
-      const bg = ctx.createGain();
-      bass.type = "sine";
-      bass.frequency.setValueAtTime(90, t);
-      bass.frequency.exponentialRampToValueAtTime(28, t + 0.35);
-      bg.gain.setValueAtTime(0.55, t);
-      bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-      bass.connect(bg);
-      bg.connect(outNode());
-      bass.start(t);
-      bass.stop(t + 0.42);
       noiseBurst(ctx, t, 0.22, { freq: 2800, type: "highpass", gain: 0.55, decay: 0.12 });
-      noiseBurst(ctx, t, 0.35, { freq: 420, type: "lowpass", gain: 0.62, decay: 0.28 });
-    }, "thud");
-    // layered whoosh via its own path (may HTML-fallback once)
-    playWhoosh();
+    }, "burst");
+    if (!usedSample && !sampleBuffers.burst) playWhoosh();
   }
 
   function playWoodChime() {
     withAudio((ctx, t) => {
+      const rate = 0.96 + Math.random() * 0.1;
+      if (tryPlaySample(ctx, t, "wood", { rate, gain: 0.9 })) return;
       const freqs = [392, 588, 784];
       const peaks = [0.34, 0.14, 0.07];
       freqs.forEach((f, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        const filter = ctx.createBiquadFilter();
         osc.type = "sine";
         osc.frequency.setValueAtTime(f, t);
-        filter.type = "lowpass";
-        filter.frequency.value = 2400;
         gain.gain.setValueAtTime(0.0001, t);
         gain.gain.exponentialRampToValueAtTime(peaks[i], t + 0.004);
         gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
-        osc.connect(filter);
-        filter.connect(gain);
+        osc.connect(gain);
         gain.connect(outNode());
         osc.start(t);
         osc.stop(t + 0.5);
       });
-      noiseBurst(ctx, t, 0.035, { freq: 920, type: "bandpass", Q: 1.8, gain: 0.32, decay: 0.08 });
-      noiseBurst(ctx, t, 0.05, { freq: 380, type: "bandpass", Q: 1.2, gain: 0.22, decay: 0.12 });
     }, "wood");
   }
 
   function playTick() {
     withAudio((ctx, t) => {
+      if (tryPlaySample(ctx, t, "tick", { rate: 0.95 + Math.random() * 0.15, gain: 0.55 })) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "square";
@@ -578,8 +653,11 @@
   }
 
   function playKnead(intensity) {
+    const i = Math.max(0.2, Math.min(1.4, intensity == null ? 0.5 : intensity));
     withAudio((ctx, t) => {
-      const i = Math.max(0.2, Math.min(1.4, intensity == null ? 0.5 : intensity));
+      // soft splat/tick blend for squeeze knead
+      if (tryPlaySample(ctx, t, "splat", { rate: 1.15 + i * 0.2, gain: 0.28 + i * 0.2 })) return;
+      if (tryPlaySample(ctx, t, "tick", { rate: 0.8, gain: 0.2 + i * 0.15 })) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
@@ -592,22 +670,26 @@
       gain.connect(outNode());
       osc.start(t);
       osc.stop(t + 0.08);
-    }, "tick");
+    }, "splat");
   }
 
   function playSplat() {
-    playPop(0.65, 1.85);
     withAudio((ctx, t) => {
+      if (tryPlaySample(ctx, t, "splat", { rate: 0.9 + Math.random() * 0.2, gain: 0.95 })) {
+        tryPlaySample(ctx, t, "pop", { rate: 0.7, gain: 0.35 });
+        return;
+      }
       noiseBurst(ctx, t, 0.14, { freq: 280, type: "lowpass", gain: 0.55, decay: 0.25 });
       noiseBurst(ctx, t, 0.08, { freq: 1600, type: "bandpass", Q: 1.1, gain: 0.4, decay: 0.12 });
-    }, "pop");
+    }, "splat");
   }
 
-  /** Loud verification beep — forces unmute and plays HTML + WebAudio. */
+  /** Loud verification — real punch sample (测试音效). */
   function playTestBeep() {
     setMuted(false);
     pokeHtmlUnlock();
-    playHtmlSfx("beep");
+    preloadSamples();
+    playHtmlSfx("thud", { rate: 1, volume: 1 });
     const ctx = ensureAudio();
     if (ctx) {
       pokeSilentBuffer(ctx);
@@ -616,30 +698,53 @@
         if (!ctx || ctx.state !== "running") return;
         try {
           const t = ctx.currentTime;
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "square";
-          osc.frequency.setValueAtTime(880, t);
-          osc.frequency.setValueAtTime(660, t + 0.12);
-          gain.gain.setValueAtTime(0.0001, t);
-          gain.gain.exponentialRampToValueAtTime(0.7, t + 0.008);
-          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-          osc.connect(gain);
-          gain.connect(outNode());
-          osc.start(t);
-          osc.stop(t + 0.3);
+          if (!tryPlaySample(ctx, t, "thud", { rate: 1, gain: 1.2 })) {
+            // brief backup tone if sample still loading
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(120, t);
+            osc.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.7, t + 0.006);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+            osc.connect(gain);
+            gain.connect(outNode());
+            osc.start(t);
+            osc.stop(t + 0.24);
+            noiseBurst(ctx, t, 0.05, { freq: 1600, type: "highpass", gain: 0.5, decay: 0.1 });
+          }
           audioReady = true;
           setAudioState("running");
           hideUnlockBanner();
         } catch (_) {}
       };
-      if (ctx.state === "running") fire();
-      else {
+      // If samples still loading, fire again when ready
+      const afterLoad = () => {
+        if (ctx.state === "running") fire();
+        else {
+          try {
+            ctx.resume().then(fire).catch(fire);
+          } catch (_) {
+            fire();
+          }
+        }
+      };
+      if (ctx.state === "running") {
+        fire();
+        preloadSamples().then(() => {
+          // replay punch once buffers arrive if first fire had no sample
+          if (!sampleBuffers.thud) return;
+          try {
+            if (ctx.state === "running") tryPlaySample(ctx, ctx.currentTime, "thud", { rate: 1, gain: 1.15 });
+          } catch (_) {}
+        });
+      } else {
         setAudioState("unlocking");
         try {
-          ctx.resume().then(fire).catch(fire);
+          ctx.resume().then(() => preloadSamples().then(afterLoad)).catch(afterLoad);
         } catch (_) {
-          fire();
+          afterLoad();
         }
       }
     } else {
@@ -1071,6 +1176,7 @@
 
   function unlockAudioFromGesture(forceBanner) {
     pokeHtmlUnlock();
+    preloadSamples();
     const ctx = ensureAudio();
     if (!ctx) {
       playHtmlSfx("beep");
@@ -1091,16 +1197,18 @@
         if (forceBanner) {
           try {
             const t = ctx.currentTime;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = "sine";
-            osc.frequency.value = 660;
-            gain.gain.setValueAtTime(0.35, t);
-            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-            osc.connect(gain);
-            gain.connect(outNode());
-            osc.start(t);
-            osc.stop(t + 0.14);
+            if (!tryPlaySample(ctx, t, "thud", { rate: 1, gain: 0.95 })) {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = "sine";
+              osc.frequency.value = 120;
+              gain.gain.setValueAtTime(0.45, t);
+              gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+              osc.connect(gain);
+              gain.connect(outNode());
+              osc.start(t);
+              osc.stop(t + 0.18);
+            }
           } catch (_) {}
         }
       } else if (forceBanner || !audioReady) {
@@ -1219,6 +1327,8 @@
     playKnead,
     playSplat,
     playTestBeep,
+    preloadSamples,
+    sampleBuffers,
     reducedMotion: () => reducedMotion,
     vibrate,
     recordHit,
