@@ -44,6 +44,33 @@
     reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch (_) {}
 
+
+  /* —— Harden against mobile pinch-zoom (Safari gestures + multi-touch) —— */
+  (function blockPinchZoom() {
+    const opt = { passive: false, capture: true };
+    function prevent(e) {
+      e.preventDefault();
+    }
+    ["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
+      document.addEventListener(type, prevent, opt);
+    });
+    document.addEventListener(
+      "touchmove",
+      (e) => {
+        if (e.touches && e.touches.length > 1) prevent(e);
+      },
+      opt
+    );
+    // iOS sometimes fires ctrl+wheel zoom on trackpads; harmless on phones
+    document.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.ctrlKey) prevent(e);
+      },
+      opt
+    );
+  })();
+
   /* —— Shared API for games —— */
   const Vent = {
     ensureAudio,

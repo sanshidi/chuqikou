@@ -778,7 +778,11 @@
       core,
       boom,
       timeEl: core.querySelector(".pool-bubble-time"),
-      xPct: 12 + Math.random() * 66,
+      baseXPct: pickBaseXPct(),
+      xPct: 50,
+      yPct: 78,
+      phase: Math.random() * Math.PI * 2,
+      size: MIN_SIZE,
       playing: false,
       pauseOffset: 0,
       nodes: null,
@@ -786,6 +790,7 @@
       longFired: false,
       suppressClick: false,
     };
+    item.xPct = item.baseXPct;
     bubbles.set(id, item);
 
     core.addEventListener("pointerdown", (e) => {
@@ -885,17 +890,102 @@
     return Math.min(1, Math.max(0, (now - item.createdAt) / total));
   }
 
-  function updateBubbleVisual(item, now) {
-    const p = progressOf(item, now || Date.now());
-    const size = MIN_SIZE + p * (MAX_SIZE - MIN_SIZE);
-    const yPct = 78 - p * 62;
-    const x = item.xPct + Math.sin((now || Date.now()) / 900 + item.xPct) * 3;
-    item.el.style.width = size + "px";
-    item.el.style.height = size + "px";
-    item.el.style.left = x + "%";
-    item.el.style.top = yPct + "%";
-    item.timeEl.textContent = formatRemain(item.explodeAt - (now || Date.now()));
+  function pickBaseXPct() {
+    const slots = [16, 32, 48, 64, 80];
+    let best = slots[bubbles.size % slots.length];
+    let bestScore = -1;
+    const existing = [];
+    bubbles.forEach((b) => {
+      if (!b._exploding) existing.push(b.xPct != null ? b.xPct : b.baseXPct);
+    });
+    slots.forEach((s) => {
+      let minD = 100;
+      existing.forEach((x) => {
+        minD = Math.min(minD, Math.abs(s - x));
+      });
+      if (!existing.length) minD = 100;
+      if (minD > bestScore) {
+        bestScore = minD;
+        best = s;
+      }
+    });
+    return best + (Math.random() * 4 - 2);
+  }
+
+  function applyBubbleStyle(item, now) {
+    const p = progressOf(item, now);
+    item.el.style.width = item.size + "px";
+    item.el.style.height = item.size + "px";
+    item.el.style.left = item.xPct + "%";
+    item.el.style.top = item.yPct + "%";
+    item.timeEl.textContent = formatRemain(item.explodeAt - now);
     item.el.classList.toggle("is-hot", p > 0.75);
+  }
+
+  /** Ideal rise path, then separate overlapping bubbles in tank space */
+  function layoutBubbles(now) {
+    const tw = Math.max(1, tank.clientWidth);
+    const th = Math.max(1, tank.clientHeight);
+    const list = [];
+    bubbles.forEach((item) => {
+      if (item._exploding) return;
+      const p = progressOf(item, now);
+      const size = MIN_SIZE + p * (MAX_SIZE - MIN_SIZE);
+      const idealY = 78 - p * 62;
+      const idealX = item.baseXPct + Math.sin(now / 1400 + item.phase) * 2.2;
+      item.size = size;
+      if (item.xPct == null) item.xPct = idealX;
+      if (item.yPct == null) item.yPct = idealY;
+      item.xPct += (idealX - item.xPct) * 0.1;
+      item.yPct += (idealY - item.yPct) * 0.14;
+      list.push(item);
+    });
+
+    const pad = 12;
+    for (let iter = 0; iter < 5; iter++) {
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i];
+          const b = list[j];
+          const ax = (a.xPct / 100) * tw;
+          const ay = (a.yPct / 100) * th;
+          const bx = (b.xPct / 100) * tw;
+          const by = (b.yPct / 100) * th;
+          let dx = bx - ax;
+          let dy = by - ay;
+          let dist = Math.hypot(dx, dy);
+          const minDist = (a.size + b.size) / 2 + pad;
+          if (dist >= minDist) continue;
+          if (dist < 0.001) {
+            dx = (i + 1) * 0.7;
+            dy = (j + 1) * 0.3;
+            dist = Math.hypot(dx, dy);
+          }
+          const push = (minDist - dist) / 2;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          // Prefer horizontal separation so rise motion stays readable
+          const sx = ((nx * push * 0.9) / tw) * 100;
+          const sy = ((ny * push * 0.35) / th) * 100;
+          a.xPct -= sx;
+          a.yPct -= sy;
+          b.xPct += sx;
+          b.yPct += sy;
+        }
+      }
+    }
+
+    list.forEach((item) => {
+      const halfX = ((item.size / 2) / tw) * 100;
+      const halfY = ((item.size / 2) / th) * 100;
+      item.xPct = Math.max(halfX + 1, Math.min(100 - halfX - 1, item.xPct));
+      item.yPct = Math.max(halfY + 4, Math.min(90 - halfY, item.yPct));
+      applyBubbleStyle(item, now);
+    });
+  }
+
+  function updateBubbleVisual(item, now) {
+    layoutBubbles(now || Date.now());
   }
 
   function explodeBubble(id, manual) {
@@ -985,9 +1075,9 @@
     if (rafId) return;
     const tick = () => {
       const now = Date.now();
+      layoutBubbles(now);
       bubbles.forEach((item) => {
         if (item._exploding) return;
-        updateBubbleVisual(item, now);
         if (now >= item.explodeAt) explodeBubble(item.id, false);
       });
       if (fxParticles.length) drawFx();
@@ -1002,7 +1092,10 @@
   }
 
   window.addEventListener("resize", () => {
-    if (bubbles.size || fxParticles.length) resizeFx();
+    if (bubbles.size || fxParticles.length) {
+      resizeFx();
+      if (bubbles.size) layoutBubbles(Date.now());
+    }
   });
 
   syncPendingButtons();
