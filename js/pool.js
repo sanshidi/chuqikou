@@ -1,7 +1,7 @@
 /**
  * 出气口 · 情绪池
- * Local-only voice bubbles: record → drop → grow/rise → play/pause or explode.
- * Audio never uploaded. In-memory only (refresh clears).
+ * WeChat-style hold-to-talk + comedy voice bubbles.
+ * Local-only; in-memory (refresh clears); never uploaded.
  */
 (function () {
   "use strict";
@@ -14,14 +14,32 @@
   const btnRec = document.getElementById("btnPoolRec");
   const btnPreview = document.getElementById("btnPoolPreview");
   const btnDrop = document.getElementById("btnPoolDrop");
+  const wxHud = document.getElementById("wxRecHud");
+  const wxTip = document.getElementById("wxRecTip");
+  const wxTime = document.getElementById("wxRecTime");
+  const wxHoldLabel = document.getElementById("wxHoldLabel");
+  const wxRec = document.getElementById("wxRec");
   if (!tank || !btnRec) return;
 
-  const VOICE_RATE = { normal: 1, low: 0.72, high: 1.38, echo: 1 };
+  /* Comedy gag presets — obvious, not studio-subtle */
+  const VOICE_PRESETS = {
+    normal: { label: "原声", rate: 1, detune: 0, filter: null, echo: false, tremolo: 0 },
+    m2f: { label: "男变女", rate: 1.62, detune: 280, filter: "bright", echo: false, tremolo: 0 },
+    f2m: { label: "女变男", rate: 0.62, detune: -220, filter: "dark", echo: false, tremolo: 0 },
+    helium: { label: "卡通娃娃", rate: 1.92, detune: 420, filter: "helium", echo: false, tremolo: 0 },
+    monster: { label: "大叔怪兽", rate: 0.48, detune: -380, filter: "monster", echo: false, tremolo: 0 },
+    robot: { label: "电音颤音", rate: 1.08, detune: 60, filter: "robot", echo: false, tremolo: 14 },
+    echo: { label: "回声搞笑", rate: 1.1, detune: 40, filter: null, echo: true, tremolo: 0 },
+  };
+
   const MIN_SIZE = 52;
   const MAX_SIZE = 118;
   const LONG_PRESS_MS = 650;
+  const MIN_SEND_MS = 700;
+  const MAX_REC_MS = 60000;
+  const CANCEL_SLIDE_PX = 56;
 
-  let fuseMode = "day"; // 10 | 20 | day
+  let fuseMode = "day";
   let voiceMode = "normal";
   let recording = false;
   let mediaRecorder = null;
@@ -29,11 +47,27 @@
   let recordChunks = [];
   let recordStartedAt = 0;
   let pendingBlob = null;
-  let pendingUrl = null;
+  let lastBlob = null;
   let previewNodes = null;
   let previewPlaying = false;
 
-  /** @type {Map<string, object>} */
+  /* Live capture graph */
+  let capCtx = null;
+  let capSource = null;
+  let capGain = null;
+  let capComp = null;
+  let capDest = null;
+  let capAnalyser = null;
+  let meterRaf = 0;
+
+  /* Hold-to-talk gesture */
+  let holdPointerId = null;
+  let holdStartY = 0;
+  let cancelArmed = false;
+  let recTimerInterval = 0;
+  let maxRecTimer = 0;
+  let finishing = false;
+
   const bubbles = new Map();
   let fxParticles = [];
   let rafId = 0;
@@ -44,6 +78,10 @@
 
   function setStatus(msg) {
     statusEl.textContent = msg;
+  }
+
+  function voiceLabel(v) {
+    return (VOICE_PRESETS[v] && VOICE_PRESETS[v].label) || v;
   }
 
   function endOfTodayMs() {
@@ -64,7 +102,13 @@
     return "今天结束";
   }
 
-  /* —— Chip groups —— */
+  function formatClock(ms) {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return m + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  /* —— Chips —— */
   document.querySelectorAll(".emotion-pool [data-fuse]").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".emotion-pool [data-fuse]").forEach((b) => {
@@ -72,7 +116,7 @@
         b.setAttribute("aria-pressed", b === btn ? "true" : "false");
       });
       fuseMode = btn.getAttribute("data-fuse");
-      setStatus("引信：" + fuseLabel() + "。录完再丢进池里。");
+      setStatus("引信：" + fuseLabel() + "。按住说话，松手丢进池。");
     });
   });
 
@@ -83,11 +127,11 @@
         b.setAttribute("aria-pressed", b === btn ? "true" : "false");
       });
       voiceMode = btn.getAttribute("data-voice");
-      setStatus("变声：" + btn.textContent + "（试听与泡泡播放都会用这个）。");
+      setStatus("变声：「" + voiceLabel(voiceMode) + "」— 很夸张，试听或丢进池后点泡泡听。");
     });
   });
 
-  /* —— Audio helpers (Web Audio, for pitch-ish rate + echo) —— */
+  /* —— Audio ctx —— */
   function ensureCtx() {
     if (window.Vent && typeof Vent.ensureAudio === "function") return Vent.ensureAudio();
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -110,6 +154,9 @@
       }
     } catch (_) {}
     try {
+      if (nodes.lfo) nodes.lfo.stop();
+    } catch (_) {}
+    try {
       if (nodes.source) nodes.source.disconnect();
     } catch (_) {}
     (nodes.extras || []).forEach((n) => {
@@ -119,51 +166,124 @@
     });
   }
 
+  function applyFilter(ctx, filterKind) {
+    if (!filterKind) return null;
+    const f = ctx.createBiquadFilter();
+    if (filterKind === "bright") {
+      f.type = "highshelf";
+      f.frequency.value = 1800;
+      f.gain.value = 10;
+    } else if (filterKind === "dark") {
+      f.type = "lowshelf";
+      f.frequency.value = 320;
+      f.gain.value = 9;
+    } else if (filterKind === "helium") {
+      f.type = "highpass";
+      f.frequency.value = 420;
+      f.Q.value = 0.7;
+    } else if (filterKind === "monster") {
+      f.type = "lowpass";
+      f.frequency.value = 480;
+      f.Q.value = 0.9;
+    } else if (filterKind === "robot") {
+      f.type = "bandpass";
+      f.frequency.value = 1100;
+      f.Q.value = 4.5;
+    }
+    return f;
+  }
+
   /**
-   * Play blob with voice preset. Returns control object { stop, getOffset }.
-   * onEnded called when naturally finished.
+   * Play with gag voice. Returns { stop, getOffset }.
    */
   async function playWithVoice(blob, voice, offsetSec, onEnded) {
     const ctx = ensureCtx();
     if (!ctx || !blob) return null;
     const ab = await blob.arrayBuffer();
     const buffer = await ctx.decodeAudioData(ab.slice(0));
-    const rate = VOICE_RATE[voice] || 1;
+    const preset = VOICE_PRESETS[voice] || VOICE_PRESETS.normal;
+    const rate = preset.rate;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.playbackRate.value = rate;
+    try {
+      source.detune.value = preset.detune || 0;
+    } catch (_) {}
+
     const extras = [];
     const master = ctx.createGain();
-    master.gain.value = 0.95;
+    master.gain.value = 1;
     extras.push(master);
 
-    if (voice === "echo") {
+    let node = source;
+    const filt = applyFilter(ctx, preset.filter);
+    if (filt) {
+      extras.push(filt);
+      node.connect(filt);
+      node = filt;
+    }
+
+    let lfo = null;
+    if (preset.tremolo > 0) {
+      const tremolo = ctx.createGain();
+      tremolo.gain.value = 0.55;
+      extras.push(tremolo);
+      lfo = ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.value = preset.tremolo;
+      const lfoDepth = ctx.createGain();
+      lfoDepth.gain.value = 0.45;
+      extras.push(lfoDepth);
+      lfo.connect(lfoDepth);
+      lfoDepth.connect(tremolo.gain);
+      node.connect(tremolo);
+      node = tremolo;
+      lfo.start();
+    }
+
+    if (preset.echo) {
       const dry = ctx.createGain();
-      dry.gain.value = 0.85;
-      const delay = ctx.createDelay(1.0);
-      delay.delayTime.value = 0.24;
+      dry.gain.value = 0.75;
+      const delay = ctx.createDelay(1.2);
+      delay.delayTime.value = 0.28;
       const fb = ctx.createGain();
-      fb.gain.value = 0.32;
+      fb.gain.value = 0.48;
       const wet = ctx.createGain();
-      wet.gain.value = 0.45;
-      extras.push(dry, delay, fb, wet);
-      source.connect(dry);
+      wet.gain.value = 0.7;
+      const delay2 = ctx.createDelay(1.2);
+      delay2.delayTime.value = 0.52;
+      const wet2 = ctx.createGain();
+      wet2.gain.value = 0.4;
+      extras.push(dry, delay, fb, wet, delay2, wet2);
+      node.connect(dry);
       dry.connect(master);
-      source.connect(delay);
+      node.connect(delay);
       delay.connect(fb);
       fb.connect(delay);
       delay.connect(wet);
       wet.connect(master);
+      node.connect(delay2);
+      delay2.connect(wet2);
+      wet2.connect(master);
     } else {
-      source.connect(master);
+      node.connect(master);
     }
     master.connect(ctx.destination);
 
     const startAt = ctx.currentTime;
-    const off = Math.max(0, Math.min(offsetSec || 0, buffer.duration - 0.01));
+    const off = Math.max(0, Math.min(offsetSec || 0, Math.max(0, buffer.duration - 0.02)));
     source.start(0, off);
     let stopped = false;
+    const durationAtRate = (buffer.duration - off) / rate;
+    const endWatch = setTimeout(() => {
+      if (!stopped && typeof onEnded === "function") {
+        stopped = true;
+        onEnded();
+      }
+    }, durationAtRate * 1000 + 80);
+
     source.onended = () => {
+      clearTimeout(endWatch);
       if (stopped) return;
       stopped = true;
       if (typeof onEnded === "function") onEnded();
@@ -171,6 +291,7 @@
 
     return {
       source,
+      lfo,
       extras,
       buffer,
       rate,
@@ -179,9 +300,9 @@
       stop() {
         if (stopped) return;
         stopped = true;
-        stopGraph({ source, extras });
+        clearTimeout(endWatch);
+        stopGraph({ source, lfo, extras });
       },
-      /** Elapsed content seconds accounting for playbackRate */
       getOffset() {
         const elapsed = (ctx.currentTime - startAt) * rate;
         return Math.min(buffer.duration, off + elapsed);
@@ -189,153 +310,427 @@
     };
   }
 
-  /* —— Recording —— */
+  /* —— Capture quality: opus + bitrate + live gain/compressor —— */
   function pickMime() {
     const types = [
       "audio/webm;codecs=opus",
+      "audio/webm;codecs=opus,pcm",
       "audio/webm",
+      "audio/mp4;codecs=mp4a.40.2",
       "audio/mp4",
       "audio/ogg;codecs=opus",
     ];
     for (const t of types) {
-      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
-        return t;
-      }
+      try {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+      } catch (_) {}
     }
     return "";
   }
 
-  async function startRecording() {
-    if (recording) return;
+  function teardownCaptureGraph() {
+    if (meterRaf) {
+      cancelAnimationFrame(meterRaf);
+      meterRaf = 0;
+    }
+    try {
+      if (capSource) capSource.disconnect();
+    } catch (_) {}
+    try {
+      if (capGain) capGain.disconnect();
+    } catch (_) {}
+    try {
+      if (capComp) capComp.disconnect();
+    } catch (_) {}
+    try {
+      if (capAnalyser) capAnalyser.disconnect();
+    } catch (_) {}
+    capSource = capGain = capComp = capDest = capAnalyser = null;
+  }
+
+  function buildCaptureGraph(stream) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return stream;
+    capCtx = capCtx || ensureCtx() || new AC();
+    if (capCtx.state === "suspended") capCtx.resume();
+    capSource = capCtx.createMediaStreamSource(stream);
+    capGain = capCtx.createGain();
+    capGain.gain.value = 1.65;
+    capComp = capCtx.createDynamicsCompressor();
+    capComp.threshold.value = -28;
+    capComp.knee.value = 18;
+    capComp.ratio.value = 10;
+    capComp.attack.value = 0.003;
+    capComp.release.value = 0.18;
+    capAnalyser = capCtx.createAnalyser();
+    capAnalyser.fftSize = 256;
+    capDest = capCtx.createMediaStreamDestination();
+    capSource.connect(capGain);
+    capGain.connect(capComp);
+    capComp.connect(capAnalyser);
+    capAnalyser.connect(capDest);
+    return capDest.stream;
+  }
+
+  function pulseMeter() {
+    if (!capAnalyser || !recording) return;
+    const data = new Uint8Array(capAnalyser.frequencyBinCount);
+    capAnalyser.getByteFrequencyData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += data[i];
+    const avg = sum / data.length / 255;
+    const bars = wxRec ? wxRec.querySelectorAll(".wx-bar") : [];
+    bars.forEach((bar, i) => {
+      const h = 20 + avg * 70 * (0.5 + ((i * 17) % 10) / 10);
+      bar.style.height = Math.min(100, h) + "%";
+      bar.classList.toggle("is-loud", avg > 0.28);
+    });
+    meterRaf = requestAnimationFrame(pulseMeter);
+  }
+
+  /** Peak-normalize decoded audio and re-wrap as 16-bit mono WAV for louder clear playback */
+  async function normalizeToWavBlob(blob) {
+    const ctx = ensureCtx();
+    if (!ctx) return blob;
+    let buffer;
+    try {
+      buffer = await ctx.decodeAudioData((await blob.arrayBuffer()).slice(0));
+    } catch (_) {
+      return blob;
+    }
+    const len = buffer.length;
+    const ch = buffer.numberOfChannels;
+    const mixed = new Float32Array(len);
+    for (let c = 0; c < ch; c++) {
+      const d = buffer.getChannelData(c);
+      for (let i = 0; i < len; i++) mixed[i] += d[i] / ch;
+    }
+    let peak = 0.0001;
+    for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(mixed[i]));
+    const gain = Math.min(3.8, 0.9 / peak);
+    const sr = buffer.sampleRate;
+    const out = new ArrayBuffer(44 + len * 2);
+    const v = new DataView(out);
+    const wstr = (o, s) => {
+      for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
+    };
+    wstr(0, "RIFF");
+    v.setUint32(4, 36 + len * 2, true);
+    wstr(8, "WAVE");
+    wstr(12, "fmt ");
+    v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true);
+    v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true);
+    v.setUint32(28, sr * 2, true);
+    v.setUint16(32, 2, true);
+    v.setUint16(34, 16, true);
+    wstr(36, "data");
+    v.setUint32(40, len * 2, true);
+    let o = 44;
+    for (let i = 0; i < len; i++) {
+      let s = Math.max(-1, Math.min(1, mixed[i] * gain));
+      v.setInt16(o, (s * 32767) | 0, true);
+      o += 2;
+    }
+    return new Blob([out], { type: "audio/wav" });
+  }
+
+  async function startRecordingFromGesture() {
+    if (recording || finishing) return false;
     ensureCtx();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setStatus("这台设备不支持录音。可以看看别的出气方式。");
-      return;
+      setStatus("这台设备不支持录音。");
+      return false;
     }
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000,
+        },
+      });
     } catch (err) {
-      setStatus("没拿到麦克风权限。可以改权限后再试，或先玩夜市小游戏。");
-      btnRec.classList.remove("is-recording");
-      btnRec.setAttribute("aria-pressed", "false");
-      return;
+      setStatus("没拿到麦克风权限。去系统设置开一下再试。");
+      return false;
     }
+
+    const processed = buildCaptureGraph(mediaStream);
     recordChunks = [];
     const mime = pickMime();
+    const recOpts = { audioBitsPerSecond: 192000 };
+    if (mime) recOpts.mimeType = mime;
     try {
-      mediaRecorder = mime
-        ? new MediaRecorder(mediaStream, { mimeType: mime })
-        : new MediaRecorder(mediaStream);
-    } catch (err) {
-      setStatus("没法启动录音机。换个浏览器试试？");
-      stopStream();
-      return;
+      mediaRecorder = new MediaRecorder(processed, recOpts);
+    } catch (_) {
+      try {
+        mediaRecorder = mime
+          ? new MediaRecorder(processed, { mimeType: mime, audioBitsPerSecond: 128000 })
+          : new MediaRecorder(processed, { audioBitsPerSecond: 128000 });
+      } catch (err2) {
+        try {
+          mediaRecorder = new MediaRecorder(processed);
+        } catch (err3) {
+          setStatus("没法启动录音机。换个浏览器试试？");
+          stopMicTracks();
+          teardownCaptureGraph();
+          return false;
+        }
+      }
     }
+
     mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) recordChunks.push(e.data);
     };
-    mediaRecorder.onstop = () => {
-      stopStream();
-      const type = (mediaRecorder && mediaRecorder.mimeType) || mime || "audio/webm";
-      if (!recordChunks.length) {
-        setStatus("好像没录到声音。再试一次？");
-        syncPendingButtons();
-        return;
-      }
-      if (pendingUrl) URL.revokeObjectURL(pendingUrl);
-      pendingBlob = new Blob(recordChunks, { type });
-      pendingUrl = URL.createObjectURL(pendingBlob);
-      const sec = ((Date.now() - recordStartedAt) / 1000).toFixed(1);
-      setStatus("录好了约 " + sec + " 秒。可以试听，或丢进池里（引信：" + fuseLabel() + "）。");
-      syncPendingButtons();
-    };
+
     recording = true;
     recordStartedAt = Date.now();
-    mediaRecorder.start(100);
-    btnRec.classList.add("is-recording");
-    btnRec.setAttribute("aria-pressed", "true");
-    btnRec.textContent = "录音中… 再点结束";
-    setStatus("正在听你说… 说完再点一下结束。");
+    cancelArmed = false;
+    mediaRecorder.start(50);
+    pulseMeter();
+    return true;
   }
 
-  function stopStream() {
+  function stopMicTracks() {
     if (mediaStream) {
       mediaStream.getTracks().forEach((t) => t.stop());
       mediaStream = null;
     }
   }
 
-  function stopRecording() {
-    if (!recording || !mediaRecorder) return;
-    recording = false;
-    btnRec.classList.remove("is-recording");
-    btnRec.setAttribute("aria-pressed", "false");
-    btnRec.textContent = "点一下开始录音";
-    try {
-      if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    } catch (_) {
-      stopStream();
+  function showHud(show) {
+    if (!wxHud) return;
+    wxHud.hidden = !show;
+  }
+
+  function setCancelUi(on) {
+    cancelArmed = on;
+    if (wxRec) wxRec.classList.toggle("is-cancel", on);
+    if (btnRec) btnRec.classList.toggle("is-cancel", on);
+    if (wxTip) wxTip.textContent = on ? "松开 取消" : "松开发送";
+    if (wxHoldLabel) wxHoldLabel.textContent = on ? "松开 取消" : "松开发送";
+  }
+
+  function updateRecClock() {
+    if (!recording) return;
+    const ms = Date.now() - recordStartedAt;
+    if (wxTime) wxTime.textContent = formatClock(ms);
+    if (ms >= MAX_REC_MS - 50) {
+      // soft max — finish as send
+      finishHold(false, true);
     }
   }
 
+  async function finalizeChunks(discard) {
+    teardownCaptureGraph();
+    stopMicTracks();
+    const mime = (mediaRecorder && mediaRecorder.mimeType) || pickMime() || "audio/webm";
+    mediaRecorder = null;
+    if (discard || !recordChunks.length) {
+      recordChunks = [];
+      return null;
+    }
+    let blob = new Blob(recordChunks, { type: mime });
+    recordChunks = [];
+    try {
+      blob = await normalizeToWavBlob(blob);
+    } catch (_) {}
+    return blob;
+  }
+
+  function waitRecorderStop(rec) {
+    return new Promise((resolve) => {
+      if (!rec || rec.state === "inactive") {
+        resolve();
+        return;
+      }
+      const prev = rec.onstop;
+      rec.onstop = () => {
+        if (typeof prev === "function") prev();
+        resolve();
+      };
+      try {
+        rec.stop();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
+
+  async function finishHold(cancelled, fromMax) {
+    if (!recording || finishing) return;
+    finishing = true;
+    recording = false;
+    if (recTimerInterval) {
+      clearInterval(recTimerInterval);
+      recTimerInterval = 0;
+    }
+    if (maxRecTimer) {
+      clearTimeout(maxRecTimer);
+      maxRecTimer = 0;
+    }
+
+    const elapsed = Date.now() - recordStartedAt;
+    const tooShort = !cancelled && elapsed < MIN_SEND_MS;
+    const discard = cancelled || tooShort;
+
+    showHud(false);
+    setCancelUi(false);
+    if (wxRec) wxRec.classList.remove("is-holding");
+    if (btnRec) btnRec.classList.remove("is-holding");
+    if (wxHoldLabel) wxHoldLabel.textContent = "按住 说话";
+    holdPointerId = null;
+
+    const rec = mediaRecorder;
+    await waitRecorderStop(rec);
+    const blob = await finalizeChunks(discard);
+    finishing = false;
+
+    if (cancelled) {
+      setStatus("已取消。再按住说一次吧。");
+      return;
+    }
+    if (tooShort) {
+      setStatus("说话时间太短。按住多说一会儿再松手。");
+      return;
+    }
+    if (!blob) {
+      setStatus("好像没录到声音。再按住试一次。");
+      return;
+    }
+
+    lastBlob = blob;
+    pendingBlob = blob;
+    syncPendingButtons();
+
+    // WeChat-like: release = send into pool
+    addBubble(blob, voiceMode);
+    setStatus(
+      (fromMax ? "满 60 秒了，已帮你丢进池。" : "已丢进池。") +
+        "点泡泡听「" +
+        voiceLabel(voiceMode) +
+        "」· 点「炸」丢掉。"
+    );
+  }
+
+  /* —— WeChat hold gesture (touch + mouse) —— */
+  function onHoldStart(e) {
+    if (finishing || recording) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    ensureCtx();
+    holdPointerId = e.pointerId;
+    holdStartY = e.clientY;
+    cancelArmed = false;
+    try {
+      btnRec.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    (async () => {
+      const ok = await startRecordingFromGesture();
+      if (!ok) {
+        holdPointerId = null;
+        try {
+          btnRec.releasePointerCapture(e.pointerId);
+        } catch (_) {}
+        return;
+      }
+      // If finger already released while awaiting permission
+      if (holdPointerId !== e.pointerId) {
+        await finishHold(true, false);
+        return;
+      }
+      if (wxRec) wxRec.classList.add("is-holding");
+      if (btnRec) btnRec.classList.add("is-holding");
+      showHud(true);
+      setCancelUi(false);
+      if (wxHoldLabel) wxHoldLabel.textContent = "松开发送";
+      if (wxTime) wxTime.textContent = "0:00";
+      setStatus("正在录音… 上滑可取消");
+      recTimerInterval = setInterval(updateRecClock, 200);
+      maxRecTimer = setTimeout(() => {}, MAX_REC_MS); // clock handles max
+    })();
+  }
+
+  function onHoldMove(e) {
+    if (!recording || holdPointerId !== e.pointerId) return;
+    const dy = holdStartY - e.clientY;
+    setCancelUi(dy >= CANCEL_SLIDE_PX);
+  }
+
+  function onHoldEnd(e) {
+    if (holdPointerId !== e.pointerId && holdPointerId != null) return;
+    // permission pending: mark cancelled
+    if (!recording && holdPointerId === e.pointerId) {
+      holdPointerId = null;
+      return;
+    }
+    if (!recording) return;
+    const cancelled = cancelArmed;
+    finishHold(cancelled, false);
+    try {
+      btnRec.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+  }
+
+  btnRec.addEventListener("pointerdown", onHoldStart);
+  btnRec.addEventListener("pointermove", onHoldMove);
+  btnRec.addEventListener("pointerup", onHoldEnd);
+  btnRec.addEventListener("pointercancel", (e) => {
+    if (recording && holdPointerId === e.pointerId) finishHold(true, false);
+    holdPointerId = null;
+  });
+  // Prevent context menu / scroll hijack on the hold button
+  btnRec.addEventListener("contextmenu", (e) => e.preventDefault());
+
   function syncPendingButtons() {
-    const has = !!pendingBlob;
+    const has = !!(pendingBlob || lastBlob);
     btnPreview.disabled = !has;
     btnDrop.disabled = !has;
   }
 
-  btnRec.addEventListener("click", () => {
-    if (recording) stopRecording();
-    else startRecording();
-  });
-
   btnPreview.addEventListener("click", async () => {
-    if (!pendingBlob) return;
+    const blob = pendingBlob || lastBlob;
+    if (!blob) return;
     if (previewPlaying && previewNodes) {
       previewNodes.stop();
       previewPlaying = false;
       previewNodes = null;
-      btnPreview.textContent = "试听";
+      btnPreview.textContent = "试听变声";
       setStatus("试听已停。");
       return;
     }
     btnPreview.textContent = "停止试听";
-    setStatus("试听中（" + voiceLabel(voiceMode) + "）…");
+    setStatus("试听「" + voiceLabel(voiceMode) + "」中…");
     previewPlaying = true;
     try {
-      previewNodes = await playWithVoice(pendingBlob, voiceMode, 0, () => {
+      previewNodes = await playWithVoice(blob, voiceMode, 0, () => {
         previewPlaying = false;
         previewNodes = null;
-        btnPreview.textContent = "试听";
-        setStatus("试听结束。可以丢进池里。");
+        btnPreview.textContent = "试听变声";
+        setStatus("试听结束。可再丢一颗，或按住再说一段。");
       });
-    } catch (e) {
+    } catch (_) {
       previewPlaying = false;
-      btnPreview.textContent = "试听";
-      setStatus("试听失败了，换个浏览器或再录一次。");
+      btnPreview.textContent = "试听变声";
+      setStatus("试听失败了。");
     }
   });
 
-  function voiceLabel(v) {
-    return ({ normal: "原声", low: "低沉", high: "尖细", echo: "回声" }[v] || v);
-  }
-
   btnDrop.addEventListener("click", () => {
-    if (!pendingBlob) return;
+    const blob = pendingBlob || lastBlob;
+    if (!blob) return;
     if (previewPlaying && previewNodes) {
       previewNodes.stop();
       previewPlaying = false;
       previewNodes = null;
-      btnPreview.textContent = "试听";
+      btnPreview.textContent = "试听变声";
     }
-    addBubble(pendingBlob, voiceMode);
-    pendingBlob = null;
-    if (pendingUrl) {
-      URL.revokeObjectURL(pendingUrl);
-      pendingUrl = null;
-    }
-    syncPendingButtons();
-    setStatus("丢进池里了。点泡泡听，点「炸」炸掉。");
+    addBubble(blob, voiceMode);
+    setStatus("又丢了一颗（" + voiceLabel(voiceMode) + "）。点泡泡听。");
   });
 
   /* —— Bubbles —— */
@@ -358,6 +753,9 @@
     core.setAttribute("aria-label", "播放或暂停这段录音");
     core.innerHTML =
       '<span class="pool-bubble-icon" aria-hidden="true">🫧</span>' +
+      '<span class="pool-bubble-voice">' +
+      voiceLabel(voice) +
+      "</span>" +
       '<span class="pool-bubble-time"></span>';
 
     const boom = document.createElement("button");
@@ -370,9 +768,6 @@
     el.appendChild(boom);
     bubblesEl.appendChild(el);
 
-    const tankW = tank.clientWidth || 300;
-    const xPct = 12 + Math.random() * 66;
-
     const item = {
       id,
       blob,
@@ -383,18 +778,16 @@
       core,
       boom,
       timeEl: core.querySelector(".pool-bubble-time"),
-      xPct,
-      drift: (Math.random() - 0.5) * 0.02,
+      xPct: 12 + Math.random() * 66,
       playing: false,
       pauseOffset: 0,
       nodes: null,
       longTimer: null,
       longFired: false,
+      suppressClick: false,
     };
     bubbles.set(id, item);
 
-    // Tap/click core = play/pause; long-press = explode; 「炸」button = explode
-    item.suppressClick = false;
     core.addEventListener("pointerdown", (e) => {
       if (e.button != null && e.button !== 0) return;
       item.longFired = false;
@@ -422,7 +815,6 @@
       }
       togglePlay(item);
     });
-
     boom.addEventListener("click", (e) => {
       e.stopPropagation();
       clearLong();
@@ -442,10 +834,9 @@
       item.nodes = null;
       item.playing = false;
       item.el.classList.remove("is-playing");
-      setStatus("已暂停。再点泡泡继续听，或点「炸」丢掉。");
+      setStatus("已暂停。再点继续听，或点「炸」。");
       return;
     }
-    // stop other playing bubbles
     bubbles.forEach((b) => {
       if (b !== item && b.playing && b.nodes) {
         b.pauseOffset = b.nodes.getOffset();
@@ -458,19 +849,19 @@
     try {
       item.playing = true;
       item.el.classList.add("is-playing");
-      setStatus("在听（" + voiceLabel(item.voice) + "）… 再点暂停 · 「炸」丢掉");
+      setStatus("在听「" + voiceLabel(item.voice) + "」…");
       item.nodes = await playWithVoice(item.blob, item.voice, item.pauseOffset, () => {
         item.playing = false;
         item.pauseOffset = 0;
         item.nodes = null;
         item.el.classList.remove("is-playing");
-        setStatus("听完了。可以再点重播，或点「炸」。");
+        setStatus("听完了。可再点重播，或点「炸」。");
       });
       if (!item.nodes) {
         item.playing = false;
         item.el.classList.remove("is-playing");
       }
-    } catch (err) {
+    } catch (_) {
       item.playing = false;
       item.el.classList.remove("is-playing");
       setStatus("播放失败了。");
@@ -497,18 +888,14 @@
   function updateBubbleVisual(item, now) {
     const p = progressOf(item, now || Date.now());
     const size = MIN_SIZE + p * (MAX_SIZE - MIN_SIZE);
-    // rise: bottom 12% → top 8% of tank (Y as % from top)
     const yPct = 78 - p * 62;
     const x = item.xPct + Math.sin((now || Date.now()) / 900 + item.xPct) * 3;
     item.el.style.width = size + "px";
     item.el.style.height = size + "px";
     item.el.style.left = x + "%";
     item.el.style.top = yPct + "%";
-    item.el.style.setProperty("--p", String(p));
-    const remain = item.explodeAt - (now || Date.now());
-    item.timeEl.textContent = formatRemain(remain);
-    if (p > 0.75) item.el.classList.add("is-hot");
-    else item.el.classList.remove("is-hot");
+    item.timeEl.textContent = formatRemain(item.explodeAt - (now || Date.now()));
+    item.el.classList.toggle("is-hot", p > 0.75);
   }
 
   function explodeBubble(id, manual) {
@@ -523,20 +910,20 @@
     }
     const rect = item.el.getBoundingClientRect();
     const tankRect = tank.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2 - tankRect.left;
-    const cy = rect.top + rect.height / 2 - tankRect.top;
-    spawnBurst(cx, cy, item.el.classList.contains("is-hot"));
+    spawnBurst(rect.left + rect.width / 2 - tankRect.left, rect.top + rect.height / 2 - tankRect.top, item.el.classList.contains("is-hot"));
     playWhooshSoft();
     item.el.classList.add("is-exploding");
-    setTimeout(() => {
-      item.el.remove();
-      bubbles.delete(id);
-      if (!bubbles.size) emptyEl.hidden = false;
-    }, reducedMotion ? 80 : 420);
+    setTimeout(
+      () => {
+        item.el.remove();
+        bubbles.delete(id);
+        if (!bubbles.size) emptyEl.hidden = false;
+      },
+      reducedMotion ? 80 : 420
+    );
     setStatus(manual ? "炸掉了。气散一点就好。" : "引信到了，泡泡自己炸开了。");
   }
 
-  /* —— FX canvas particles —— */
   function resizeFx() {
     const dpr = window.devicePixelRatio || 1;
     const w = tank.clientWidth;
@@ -545,8 +932,7 @@
     fxCanvas.height = Math.floor(h * dpr);
     fxCanvas.style.width = w + "px";
     fxCanvas.style.height = h + "px";
-    const ctx = fxCanvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fxCanvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function spawnBurst(x, y, hot) {
@@ -605,9 +991,8 @@
         if (now >= item.explodeAt) explodeBubble(item.id, false);
       });
       if (fxParticles.length) drawFx();
-      if (bubbles.size || fxParticles.length) {
-        rafId = requestAnimationFrame(tick);
-      } else {
+      if (bubbles.size || fxParticles.length) rafId = requestAnimationFrame(tick);
+      else {
         rafId = 0;
         const ctx = fxCanvas.getContext("2d");
         if (ctx) ctx.clearRect(0, 0, tank.clientWidth, tank.clientHeight);

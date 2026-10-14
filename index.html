@@ -71,7 +71,7 @@
       <div class="panel-sign">
         <span class="sign-glow">情绪池</span>
       </div>
-      <p class="pool-lead">对着麦克风倒一倒。泡泡在池里会慢慢长大、往上飘。点泡泡可以听（再点暂停）；点泡泡上的「炸」或等引信到点才会炸掉。录音只在本机，从不上传；刷新即清空。</p>
+      <p class="pool-lead">按住说话倒一倒。泡泡在池里会慢慢长大、往上飘。点泡泡可以听（再点暂停）；点泡泡上的「炸」或等引信到点才会炸掉。录音只在本机，从不上传；刷新即清空。</p>
 
       <div class="pool-controls">
         <div class="pool-row">
@@ -83,22 +83,39 @@
           </div>
         </div>
         <div class="pool-row">
-          <span class="pool-label">变声</span>
-          <div class="chip-group" role="group" aria-label="播放变声">
+          <span class="pool-label">搞笑变声</span>
+          <div class="chip-group pool-voice-chips" role="group" aria-label="搞笑变声">
             <button type="button" class="chip is-on" data-voice="normal" aria-pressed="true">原声</button>
-            <button type="button" class="chip" data-voice="low">低沉</button>
-            <button type="button" class="chip" data-voice="high">尖细</button>
-            <button type="button" class="chip" data-voice="echo">回声</button>
+            <button type="button" class="chip" data-voice="m2f">男变女</button>
+            <button type="button" class="chip" data-voice="f2m">女变男</button>
+            <button type="button" class="chip" data-voice="helium">卡通娃娃</button>
+            <button type="button" class="chip" data-voice="monster">大叔怪兽</button>
+            <button type="button" class="chip" data-voice="robot">电音颤音</button>
+            <button type="button" class="chip" data-voice="echo">回声搞笑</button>
           </div>
         </div>
       </div>
 
-      <div class="pool-record-bar">
-        <button type="button" class="neon-btn magenta pool-rec-btn" id="btnPoolRec" aria-pressed="false">点一下开始录音</button>
-        <button type="button" class="neon-btn cyan" id="btnPoolPreview" disabled>试听</button>
-        <button type="button" class="neon-btn violet" id="btnPoolDrop" disabled>丢进池里</button>
+      <div class="wx-rec" id="wxRec">
+        <div class="wx-rec-hud" id="wxRecHud" hidden>
+          <p class="wx-rec-tip" id="wxRecTip">松开发送</p>
+          <div class="wx-rec-meter" aria-hidden="true">
+            <span class="wx-bar"></span><span class="wx-bar"></span><span class="wx-bar"></span>
+            <span class="wx-bar"></span><span class="wx-bar"></span><span class="wx-bar"></span>
+            <span class="wx-bar"></span>
+          </div>
+          <p class="wx-rec-time" id="wxRecTime">0:00</p>
+        </div>
+        <button type="button" class="wx-hold-btn" id="btnPoolRec" aria-label="按住说话">
+          <span class="wx-hold-label" id="wxHoldLabel">按住 说话</span>
+        </button>
+        <p class="wx-rec-hint">按住说话，松手丢进池 · 上滑取消 · 太短不发送</p>
       </div>
-      <p class="pool-status" id="poolStatus" role="status">还没录音。需要麦克风权限；拒绝也能看着空池发呆。</p>
+      <div class="pool-record-bar pool-after-rec">
+        <button type="button" class="neon-btn cyan" id="btnPoolPreview" disabled>试听变声</button>
+        <button type="button" class="neon-btn violet" id="btnPoolDrop" disabled>再丢一颗</button>
+      </div>
+      <p class="pool-status" id="poolStatus" role="status">按住麦克风倒一倒。变声很夸张，纯本地，从不上传。</p>
       <p class="privacy-note" role="note">语音气泡仅保存在本页内存，关闭或刷新即消失；不会上传服务器。</p>
 
       <div class="pool-tank" id="poolTank" aria-label="情绪泡泡池">
