@@ -53,6 +53,7 @@
     playCrack,
     playBurst,
     playTick,
+    playWoodChime,
     reducedMotion: () => reducedMotion,
     setStat(text) {
       gameStat.textContent = text || "";
@@ -191,6 +192,53 @@
     osc.start(t);
     osc.stop(t + 0.46);
     playWhoosh();
+  }
+
+
+  function playWoodChime() {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    // Soft woody tonal: warm sine fundamental + quiet harmonic, short decay
+    const freqs = [392, 588]; // G4 + soft fifth-ish overtone
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(f, t);
+      filter.type = "lowpass";
+      filter.frequency.value = 1800;
+      const peak = i === 0 ? 0.14 : 0.045;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.58);
+    });
+    // Tiny soft knock body
+    const bufLen = Math.floor(ctx.sampleRate * 0.04);
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufLen * 0.12));
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const nf = ctx.createBiquadFilter();
+    nf.type = "bandpass";
+    nf.frequency.value = 420;
+    nf.Q.value = 1.2;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.08, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    src.connect(nf);
+    nf.connect(ng);
+    ng.connect(ctx.destination);
+    src.start(t);
   }
 
   function playTick() {
@@ -350,6 +398,7 @@
     whack: { title: "消火", hint: "火苗冒出来就戳灭。别让它们堆满。" },
     notes: { title: "甩飞便签", hint: "按住便签快速甩出屏幕外。" },
     breakout: { title: "碎砖块", hint: "拖挡板接住球，打掉烦恼砖。" },
+    muyu: { title: "敲木鱼", hint: "点一下木鱼，听一声轻响。不用赶，跟着自己的节奏就好。" },
   };
 
   function closeGame() {

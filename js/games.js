@@ -935,4 +935,102 @@
       canvas.removeEventListener("pointermove", onPointer);
     };
   };
+
+  /* ========== 11. 敲木鱼 ========== */
+  Games.muyu = function (stage, vent) {
+    clearStage(stage);
+    let hits = 0;
+    let lastHit = 0;
+    let streak = 0;
+    let bestStreak = 0;
+    const reduced = vent.reducedMotion();
+
+    const wrap = document.createElement("div");
+    wrap.className = "muyu-stage";
+    wrap.innerHTML =
+      '<p class="muyu-line" id="muyuLine">一下一下，把心敲稳</p>' +
+      '<button type="button" class="muyu-btn" id="muyuBtn" aria-label="敲木鱼">' +
+      '<span class="muyu-glow" aria-hidden="true"></span>' +
+      '<svg class="muyu-svg" viewBox="0 0 200 160" aria-hidden="true">' +
+      '<ellipse cx="100" cy="118" rx="48" ry="10" fill="rgba(12,10,18,0.45)"/>' +
+      '<path d="M42 88c0-38 26-68 58-68s58 30 58 68c0 8-6 14-18 18H60c-12-4-18-10-18-18z" fill="#c48a4a"/>' +
+      '<path d="M50 86c4-32 24-56 50-56s46 24 50 56c0 6-4 10-12 13H62c-8-3-12-7-12-13z" fill="#e0a85c"/>' +
+      '<path d="M78 52c8-6 18-8 28-6" fill="none" stroke="#8a5a2b" stroke-width="3" stroke-linecap="round" opacity="0.55"/>' +
+      '<ellipse cx="100" cy="78" rx="22" ry="16" fill="#9a6230"/>' +
+      '<ellipse cx="100" cy="78" rx="12" ry="9" fill="#6e421c"/>' +
+      '<circle cx="72" cy="70" r="4" fill="#8a5a2b" opacity="0.5"/>' +
+      '<circle cx="128" cy="70" r="4" fill="#8a5a2b" opacity="0.5"/>' +
+      '<path d="M148 40c18-8 28-4 34 8" fill="none" stroke="#d4a574" stroke-width="5" stroke-linecap="round"/>' +
+      '<circle cx="148" cy="40" r="7" fill="#b87a3a"/>' +
+      '<circle cx="182" cy="48" r="6" fill="#e8c090"/>' +
+      '</svg>' +
+      '<span class="muyu-mallet" aria-hidden="true"></span>' +
+      '</button>' +
+      '<p class="muyu-rhythm" id="muyuRhythm" aria-live="polite"></p>';
+    stage.appendChild(wrap);
+
+    const btn = wrap.querySelector("#muyuBtn");
+    const line = wrap.querySelector("#muyuLine");
+    const rhythm = wrap.querySelector("#muyuRhythm");
+    const lines = [
+      "一下一下，把心敲稳",
+      "听见了，就够了",
+      "不急，跟着自己的节奏",
+      "咚……心就落回来一点",
+      "敲着敲着，气就散了",
+    ];
+    vent.setStat("敲了 0 下");
+
+    function updateRhythm(gap) {
+      // Gentle rhythm hint only — no score pressure
+      if (!lastHit) {
+        rhythm.textContent = "慢慢来就好";
+        return;
+      }
+      if (gap >= 700 && gap <= 1400) {
+        streak++;
+        bestStreak = Math.max(bestStreak, streak);
+        if (streak >= 3) {
+          rhythm.textContent = "节奏稳着 · 连着 " + streak + " 下";
+        } else {
+          rhythm.textContent = "节奏刚刚好";
+        }
+      } else if (gap < 450) {
+        streak = 0;
+        rhythm.textContent = "可以再慢一点";
+      } else if (gap > 2000) {
+        streak = 0;
+        rhythm.textContent = "回来了就继续敲";
+      } else {
+        streak = 0;
+        rhythm.textContent = "随意，没有错的拍子";
+      }
+    }
+
+    function hit(e) {
+      if (e) e.preventDefault();
+      const now = performance.now();
+      if (lastHit) updateRhythm(now - lastHit);
+      else rhythm.textContent = "慢慢来就好";
+      lastHit = now;
+      hits++;
+      vent.playWoodChime();
+      vent.setStat("敲了 " + hits + " 下" + (bestStreak >= 3 ? " · 稳拍 " + bestStreak : ""));
+      if (hits % 5 === 0) {
+        line.textContent = lines[(hits / 5 | 0) % lines.length];
+      }
+      btn.classList.remove("is-hit", "is-glow");
+      void btn.offsetWidth;
+      btn.classList.add("is-hit");
+      if (!reduced) btn.classList.add("is-glow");
+      setTimeout(() => btn.classList.remove("is-hit"), reduced ? 80 : 180);
+      setTimeout(() => btn.classList.remove("is-glow"), reduced ? 100 : 500);
+    }
+
+    btn.addEventListener("pointerdown", hit);
+
+    return () => {
+      btn.removeEventListener("pointerdown", hit);
+    };
+  };
 })();
