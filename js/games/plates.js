@@ -90,7 +90,7 @@
       p.hp--;
       p.cracked = true;
       p.vr += rand(-0.08, 0.08);
-      V.playCrack();
+      V.playCrack(false);
       V.vibrate(16);
       V.screenShake(stage, 0.7);
       V.spawnFloatingText(stage, "裂纹!", p.x, p.y, { px: true });
@@ -117,7 +117,7 @@
     smashed++;
     const st = V.recordHit("plates", { vibrateMs: 22 });
     shatter(p, st.combo);
-    V.playCrack();
+    V.playCrack(!!p.boss);
     if (st.combo >= 3) V.playThud(0.85);
     if (p.boss) V.playBurst();
     V.screenShake(stage, p.boss ? 2 : 0.9 + Math.min(1, st.combo / 10));

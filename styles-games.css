@@ -726,3 +726,32 @@ html, body {
     opacity: 0.35;
   }
 }
+
+
+/* Tap-to-enable audio (mobile / WeChat) */
+.audio-unlock-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  appearance: none;
+  border: 1px solid rgba(92, 225, 230, 0.55);
+  background: rgba(12, 10, 18, 0.92);
+  color: var(--paper, #f4e8d8);
+  font-family: inherit;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  padding: 0.65rem 1.1rem;
+  border-radius: 999px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 18px rgba(92, 225, 230, 0.2);
+  cursor: pointer;
+  animation: unlock-pulse 1.6s ease-in-out infinite;
+}
+.audio-unlock-banner:active {
+  transform: translateX(-50%) scale(0.98);
+}
+@keyframes unlock-pulse {
+  0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 12px rgba(92, 225, 230, 0.15); }
+  50% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 22px rgba(255, 61, 127, 0.35); }
+}

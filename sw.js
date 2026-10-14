@@ -1,5 +1,5 @@
 /* 出气口 — offline cache, local-only app shell */
-const CACHE = 'chuqikou-v6';
+const CACHE = 'chuqikou-v7';
 const ASSETS = [
   './',
   './index.html',

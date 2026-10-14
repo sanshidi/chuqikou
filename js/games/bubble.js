@@ -64,7 +64,8 @@
     const st = V.recordHit("bubble", { vibrateMs: 9, comboWindowMs: 650, extra: { pops: lifetime } });
     V.setGameStat("bubble", { pops: lifetime });
     const pitch = pitchScale != null ? pitchScale : 0.75 + Math.random() * 0.7;
-    V.playPop(pitch);
+    const loud = dragging && st.combo >= 2 ? 1 + Math.min(1.1, st.combo * 0.08) : 1;
+    V.playPop(pitch, loud);
     if (st.combo >= 6) {
       grid.classList.add("combo-flash");
       setTimeout(() => grid.classList.remove("combo-flash"), 180);

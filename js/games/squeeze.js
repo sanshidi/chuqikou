@@ -92,7 +92,7 @@
     ball.classList.remove("is-squeezing", "is-tremble");
     ball.classList.add("is-burst");
     V.playBurst();
-    V.playPop(0.6);
+    V.playSplat();
     V.vibrate([18, 30, 22]);
     V.screenShake(stage, 1.8);
     const r = ball.getBoundingClientRect();
@@ -123,7 +123,7 @@
       // continuous soft ticks while squeezing
       if (t - lastTick > 90) {
         lastTick = t;
-        V.playThud(0.25 + (1 - sx) * 0.5);
+        V.playKnead(0.35 + (1 - sx) * 0.7);
       }
       // approach max squash
       targetSx = Math.max(0.55, targetSx - 0.012 * (dt / 16));
@@ -166,7 +166,7 @@
     try {
       ball.setPointerCapture(e.pointerId);
     } catch (_) {}
-    V.playThud(0.45);
+    V.playKnead(0.55);
   }
 
   function onMove(e) {
@@ -193,7 +193,8 @@
     targetSy = 1 - depth * 0.4;
     squeezes++;
     const st = V.recordHit("squeeze", { vibrateMs: 14, comboWindowMs: 1200 });
-    V.playPop(0.9 + depth);
+    V.playSplat();
+    V.playPop(0.9 + depth, 1.1);
     V.createParticleBurst(
       stage,
       ball.getBoundingClientRect().left + ball.offsetWidth / 2 - stage.getBoundingClientRect().left,

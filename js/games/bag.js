@@ -139,6 +139,7 @@
       // hit at release (or tap): use contact / center side
       const hx = Math.abs(dx) + Math.abs(dy) > 8 ? e.clientX : lastPtr.x;
       const hy = Math.abs(dx) + Math.abs(dy) > 8 ? e.clientY : lastPtr.y;
+      if (speed > 0.35 || Math.abs(dx) + Math.abs(dy) > 40) V.playWhoosh();
       hit(hx, hy, power);
       lastPtr = null;
     },

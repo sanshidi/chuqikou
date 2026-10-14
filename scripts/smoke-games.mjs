@@ -97,37 +97,58 @@ async function browserAudio(port) {
     const result = await page.evaluate(async () => {
       const V = window.VentGameCore || window.Vent;
       if (!V) return { ok: false, err: "no Vent" };
+      if (V.unlockAudio) await V.unlockAudio(true);
       await V.ensureAudioAsync();
       V.getMasterOut && V.getMasterOut();
+      if (V.setMuted) V.setMuted(false);
       const calls = [
-        ["playThud", () => V.playThud(1)],
-        ["playPop", () => V.playPop(1)],
+        ["playThud", () => V.playThud(1.4)],
+        ["playPop", () => V.playPop(1, 1.5)],
         ["playWhoosh", () => V.playWhoosh()],
-        ["playCrack", () => V.playCrack()],
+        ["playCrack", () => V.playCrack(true)],
         ["playBurst", () => V.playBurst()],
         ["playTick", () => V.playTick()],
         ["playWoodChime", () => V.playWoodChime()],
+        ["playKnead", () => V.playKnead && V.playKnead(1)],
+        ["playSplat", () => V.playSplat && V.playSplat()],
       ];
       const thrown = [];
+      let peak = 0;
       for (const [name, fn] of calls) {
         try {
           fn();
+          // sample while voice is still sounding
+          await new Promise((r) => setTimeout(r, 30));
+          peak = Math.max(peak, V.audioPeak ? V.audioPeak() : 0);
         } catch (e) {
           thrown.push(name + ": " + e.message);
         }
       }
-      // click/tap stage
+      // click/tap stage — simulated hit should also make sound
       const stage = document.getElementById("stage");
       if (stage) {
         stage.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 120, clientY: 200 }));
-        stage.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 140, clientY: 210 }));
+        stage.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 160, clientY: 220 }));
+        await new Promise((r) => setTimeout(r, 40));
+        peak = Math.max(peak, V.audioPeak ? V.audioPeak() : 0);
       }
-      await new Promise((r) => setTimeout(r, 120));
-      const peak = V.audioPeak ? V.audioPeak() : 0;
-      return { ok: thrown.length === 0, thrown, peak, hasStage: !!stage };
+      // hold a sustaining burst and re-sample
+      V.playBurst();
+      await new Promise((r) => setTimeout(r, 50));
+      peak = Math.max(peak, V.audioPeak ? V.audioPeak() : 0);
+      return {
+        ok: thrown.length === 0,
+        thrown,
+        peak,
+        hasStage: !!stage,
+        muted: V.isMuted ? V.isMuted() : null,
+        ctxState: (V.ensureAudio && V.ensureAudio() && V.ensureAudio().state) || "?",
+      };
     });
-    if (!result.ok) fails.push(id + " audio throws: " + result.thrown.join("; "));
-    else console.log("AUDIO", id, "peak~", result.peak.toFixed(3), "stage", result.hasStage);
+    if (!result.ok) fails.push(id + " audio throws: " + (result.thrown || []).join("; "));
+    else if (!(result.peak > 0.08)) {
+      fails.push(id + " audio peak too low: " + result.peak + " muted=" + result.muted + " ctx=" + result.ctxState);
+    } else console.log("AUDIO", id, "peak~", result.peak.toFixed(3), "stage", result.hasStage, "ctx", result.ctxState);
     await page.close();
   }
   await browser.close();
