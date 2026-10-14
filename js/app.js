@@ -128,6 +128,9 @@
 
   const Vent = {
     ensureAudio,
+    ensureAudioAsync,
+    getMasterOut,
+    audioPeak,
     playThud,
     playPop,
     playWhoosh,
@@ -168,8 +171,50 @@
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) audioCtx = new AC();
     }
-    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx && audioCtx.state === "suspended") {
+      try {
+        audioCtx.resume();
+      } catch (_) {}
+    }
     return audioCtx;
+  }
+
+  function ensureAudioAsync() {
+    const ctx = ensureAudio();
+    if (!ctx) return Promise.resolve(null);
+    if (ctx.state === "suspended") {
+      return ctx.resume().then(() => ctx).catch(() => ctx);
+    }
+    return Promise.resolve(ctx);
+  }
+
+  let masterOut = null;
+  let masterAnalyser = null;
+
+  function getMasterOut() {
+    const ctx = ensureAudio();
+    if (!ctx) return null;
+    if (!masterOut) {
+      masterAnalyser = ctx.createAnalyser();
+      masterAnalyser.fftSize = 256;
+      masterOut = ctx.createGain();
+      masterOut.gain.value = 1;
+      masterOut.connect(masterAnalyser);
+      masterAnalyser.connect(ctx.destination);
+    }
+    return masterOut;
+  }
+
+  /** Peak 0–1 from recent SFX into shared master (for QA / meters). */
+  function audioPeak() {
+    if (!masterAnalyser) return 0;
+    const data = new Uint8Array(masterAnalyser.frequencyBinCount);
+    masterAnalyser.getByteTimeDomainData(data);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) {
+      peak = Math.max(peak, Math.abs(data[i] - 128));
+    }
+    return peak / 128;
   }
 
   function playThud(intensity) {
@@ -189,7 +234,7 @@
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getMasterOut() || ctx.destination);
     osc.start(t);
     osc.stop(t + 0.16);
   }
@@ -207,7 +252,7 @@
     gain.gain.exponentialRampToValueAtTime(0.18, t + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getMasterOut() || ctx.destination);
     osc.start(t);
     osc.stop(t + 0.11);
   }
@@ -233,7 +278,7 @@
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getMasterOut() || ctx.destination);
     src.start(t);
   }
 
@@ -256,7 +301,7 @@
     gain.gain.value = 0.22;
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getMasterOut() || ctx.destination);
     src.start(t);
   }
 
@@ -272,7 +317,7 @@
     gain.gain.setValueAtTime(0.2, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getMasterOut() || ctx.destination);
     osc.start(t);
     osc.stop(t + 0.46);
     playWhoosh();
@@ -299,7 +344,7 @@
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(getMasterOut() || ctx.destination);
       osc.start(t);
       osc.stop(t + 0.58);
     });
@@ -321,7 +366,7 @@
     ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
     src.connect(nf);
     nf.connect(ng);
-    ng.connect(ctx.destination);
+    ng.connect(getMasterOut() || ctx.destination);
     src.start(t);
   }
 
@@ -336,7 +381,7 @@
     gain.gain.setValueAtTime(0.06, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getMasterOut() || ctx.destination);
     osc.start(t);
     osc.stop(t + 0.05);
   }

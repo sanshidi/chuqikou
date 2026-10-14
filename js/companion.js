@@ -140,6 +140,10 @@
   let webllmMessages = [{ role: "system", content: SYSTEM_PROMPT }];
   let busy = false;
   let lastBucket = null;
+  let lastReplies = []; // anti-repeat last N
+  let sessionTheme = null; // progressive in-session theme
+  let turnCount = 0;
+  let knownKeys = []; // keys echoed this session
 
   const el = {
     section: null,
@@ -170,35 +174,357 @@
     );
   }
 
+  const STOP = new Set(
+    "的了吗呢吧啊呀嘛着过就都还很不也在是有我你他她它们这那什么怎么为什么可是但是因为所以如果只是有点有些真的一下一些已经还是不是没有这么那么自己感觉觉得想要还想一下一下下".split("")
+  );
+  // Multi-char stop phrases
+  const STOP_PHRASES = [
+    "真的", "有点", "有些", "一下", "一些", "已经", "还是", "不是", "没有",
+    "这么", "那么", "自己", "感觉", "觉得", "想要", "还想", "就是", "然后",
+    "今天", "昨天", "明天", "现在", "一直", "突然", "特别", "非常", "好多",
+    "什么", "怎么", "为什么", "可以", "应该", "可能", "好像", "其实", "反正",
+  ];
+
+  function extractKeywords(text) {
+    const t = (text || "").trim();
+    const scored = []; // {k, score}
+    const seen = new Set();
+
+    function add(k, score) {
+      const s = (k || "").trim();
+      if (s.length < 2 || s.length > 14) return;
+      if (STOP_PHRASES.includes(s)) return;
+      if (!/[\u4e00-\u9fffA-Za-z0-9]/.test(s)) return;
+      if (seen.has(s)) {
+        // bump score if already present
+        const prev = scored.find((x) => x.k === s);
+        if (prev && score > prev.score) prev.score = score;
+        return;
+      }
+      seen.add(s);
+      scored.push({ k: s, score: score || 1 });
+    }
+
+    // 1) Quoted spans — high priority
+    const quoteRe = /[「『"“]([^」』"”]{2,12})[」』"”]/g;
+    let m;
+    while ((m = quoteRe.exec(t))) add(m[1], 50);
+
+    // 2) Topic lexicon — always keep
+    const LEX = [
+      "老板", "同事", "加班", "裁员", "KPI", "绩效", "开会", "客户", "甲方",
+      "父母", "妈妈", "爸爸", "亲戚", "催婚", "原生家庭",
+      "对象", "伴侣", "分手", "冷暴力", "吵架", "背叛", "朋友",
+      "房租", "房贷", "工资", "负债", "失业",
+      "失眠", "睡不好", "头疼", "胸口", "心慌",
+      "考试", "论文", "导师", "学校", "实习",
+      "微信", "电话", "消息", "已读",
+      "阴阳怪气", "甩锅", "点名", "羞辱",
+    ];
+    for (const w of LEX) {
+      if (t.includes(w)) add(w, 100);
+    }
+
+    // 3) Emotion words in text
+    const EMO = [
+      "气炸", "愤怒", "窝火", "憋屈", "受够", "崩溃", "透支", "焦虑",
+      "害怕", "委屈", "心酸", "孤独", "寂寞", "羞耻", "没用", "废物",
+      "绝望", "烦死", "火大", "撑不住", "想砸", "来气", "怒到",
+    ];
+    for (const w of EMO) {
+      if (t.includes(w)) add(w, 80);
+    }
+
+    // 4) Punctuation-separated clauses (human phrases, not sliding grams)
+    const clauses = t
+      .split(/[，。！？、；;\n,.!?]+/)
+      .map((c) => c.trim())
+      .filter((c) => c.length >= 2 && c.length <= 14);
+    for (const c of clauses) {
+      // strip leading filler
+      let cleaned = c.replace(/^(我|又|被|和|跟|对|把|让|给|还是|今天|昨天)/, "");
+      if (cleaned.length < 2) cleaned = c;
+      let stopish = 0;
+      for (const ch of cleaned) if (STOP.has(ch)) stopish++;
+      if (stopish / cleaned.length >= 0.55) continue;
+      // Prefer clauses that contain a lexicon hit
+      const hasLex = LEX.some((w) => cleaned.includes(w));
+      add(cleaned, hasLex ? 40 : 20);
+    }
+
+    // Sort by score desc, then prefer shorter concrete (2–4) among similar scores
+    scored.sort((a, b) => b.score - a.score || a.k.length - b.k.length);
+
+    const out = [];
+    for (const { k } of scored) {
+      // Drop if this key is a broken fragment of an already-chosen longer key
+      // OR if a chosen key is a lexicon word contained in this key (prefer lexicon)
+      let skip = false;
+      for (const u of out) {
+        if (u === k) {
+          skip = true;
+          break;
+        }
+        // If both overlap heavily, keep higher-scored (already ordered)
+        if (u.includes(k) && u.length - k.length <= 2) {
+          skip = true;
+          break;
+        }
+        if (k.includes(u) && LEX.includes(u)) {
+          // keep lexicon u; skip longer wrapper unless wrapper is also high-value clause
+          if (k.length > u.length + 4) {
+            /* allow both */
+          } else if (!LEX.includes(k) && !EMO.includes(k)) {
+            skip = true;
+            break;
+          }
+        }
+      }
+      if (skip) continue;
+      out.push(k);
+      if (out.length >= 5) break;
+    }
+
+    // Ensure lexicon hits that appeared in text are represented even after cap
+    for (const w of LEX) {
+      if (t.includes(w) && !out.includes(w)) {
+        // replace last non-lex if needed
+        const idx = out.findIndex((x) => !LEX.includes(x) && !EMO.includes(x));
+        if (out.length < 5) out.push(w);
+        else if (idx >= 0) out[idx] = w;
+        else if (!out.includes(w)) {
+          out[out.length - 1] = w;
+        }
+      }
+    }
+    // Same for EMO
+    for (const w of EMO) {
+      if (t.includes(w) && !out.includes(w) && out.length < 5) out.push(w);
+    }
+
+    return out;
+  }
+
+  function detectBucket(t) {
+    for (const b of BUCKETS) {
+      if (b.re.test(t)) return b;
+    }
+    return null;
+  }
+
+  function reflectClause(keys) {
+    if (!keys || !keys.length) return "";
+    const show = keys.slice(0, 2);
+    if (show.length === 1) {
+      return "你提到了「" + show[0] + "」";
+    }
+    return "你提到了「" + show[0] + "」和「" + show[1] + "」";
+  }
+
+  function rememberKeys(keys) {
+    for (const k of keys) {
+      if (!knownKeys.includes(k)) knownKeys.push(k);
+    }
+    if (knownKeys.length > 12) knownKeys = knownKeys.slice(-12);
+  }
+
+  function pickUnique(candidates, nRecent) {
+    nRecent = nRecent || 6;
+    const recent = lastReplies.slice(-nRecent);
+    const fresh = candidates.filter((c) => !recent.includes(c));
+    const pool = fresh.length ? fresh : candidates;
+    return pick(pool);
+  }
+
+  function commitReply(reply) {
+    lastReplies.push(reply);
+    if (lastReplies.length > 16) lastReplies = lastReplies.slice(-16);
+    turnCount += 1;
+    return reply;
+  }
+
+  function buildReflective(text, keys, bucket) {
+    const reflect = reflectClause(keys);
+    const theme = sessionTheme;
+    const key0 = keys[0] || "";
+    const key1 = keys[1] || "";
+
+    // Progressive: after several turns on same theme, deepen
+    const deepen =
+      theme &&
+      bucket &&
+      theme === bucket.id &&
+      turnCount >= 2 &&
+      Math.random() < 0.55;
+
+    const openers = [];
+    if (reflect) {
+      openers.push(
+        reflect + "——听起来这件事在你心里占了很大一块。",
+        reflect + "。我接住了。",
+        reflect + "，这话里压着不少力气。",
+        "关于「" + key0 + "」，我听见了。"
+      );
+      if (key1) {
+        openers.push(
+          "「" + key0 + "」和「" + key1 + "」叠在一起，确实容易把人压扁。"
+        );
+      }
+    }
+
+    const middles = [];
+    if (bucket) {
+      if (bucket.id === "anger") {
+        middles.push(
+          "这股火不是无来由的。",
+          "被气到、觉得不公平，是很真实的感受。",
+          "怒气常常在保护你不被继续伤害。"
+        );
+      } else if (bucket.id === "fatigue") {
+        middles.push(
+          "听起来你已经撑了很久。",
+          "累到说不出话也很常见。",
+          "疲惫有时是长期紧绷的信号。"
+        );
+      } else if (bucket.id === "anxiety") {
+        middles.push(
+          "焦虑让人一直悬着，很消耗。",
+          "害怕被看见时，身体也会跟着紧。",
+          "不安常常指向失控感。"
+        );
+      } else if (bucket.id === "sad") {
+        middles.push(
+          "心里很沉的时候，委屈也值得被看见。",
+          "难过的时候，不必马上振作。",
+          "眼泪和沉默都是在说话。"
+        );
+      } else if (bucket.id === "lonely") {
+        middles.push(
+          "感到孤单、觉得没人懂，是很沉的体验。",
+          "一个人扛着的时候，世界会显得特别大。"
+        );
+      } else if (bucket.id === "shame") {
+        middles.push(
+          "对自己苛刻的时候，世界会变得很小。",
+          "羞耻感常让人想躲起来——我不会评判你。"
+        );
+      } else if (bucket.id === "work") {
+        middles.push(
+          "职场的压榨感很容易把人掏空。",
+          "工作压力不只是忙，常常还有不被看见。"
+        );
+      } else if (bucket.id === "family") {
+        middles.push(
+          "和家人的纠缠常常又爱又累。",
+          "家里的期待可以很重。"
+        );
+      } else if (bucket.id === "relation") {
+        middles.push(
+          "关系里的伤口特别磨人。",
+          "被冷落或争吵之后，脑子会反复回放。"
+        );
+      }
+    } else {
+      middles.push(
+        "听起来心里有事堵着。",
+        "谢谢你愿意写下来。",
+        "我在听。"
+      );
+    }
+
+    const questions = [];
+    if (key0) {
+      questions.push(
+        "关于「" + key0 + "」，此刻最堵的那一句是什么？",
+        "「" + key0 + "」这件事，你最想对谁说一句却还没说出口？",
+        "若只盯着「" + key0 + "」，你现在身体哪里最紧——胸口、太阳穴，还是胃？",
+        "「" + key0 + "」让你最难受的，是不公平，还是无力感？"
+      );
+      if (key1) {
+        questions.push(
+          "「" + key0 + "」和「" + key1 + "」里，哪一块更想先倒出来？"
+        );
+      }
+    }
+    if (deepen && knownKeys.length) {
+      const earlier = knownKeys.filter((k) => !keys.includes(k)).slice(-2);
+      if (earlier.length) {
+        questions.push(
+          "你前面也提到过「" +
+            earlier[0] +
+            "」。它和现在说的「" +
+            (key0 || "这件事") +
+            "」是连在一起的吗？",
+          "我们绕回「" +
+            earlier[0] +
+            "」看一眼——今天又触到它了吗？"
+        );
+      }
+      questions.push(
+        "同一主题又回来了。若用一个动作形容这股感觉，你会选砸、撕，还是把气吐掉？",
+        "已经说了几轮。你更想继续挖深一点，还是换个角度——比如身体现在什么感觉？"
+      );
+    }
+    questions.push(
+      "你愿意多说一点吗？",
+      "此刻最想被接住的是哪一句？",
+      "继续说也行，停一停也行——你现在更想怎样？"
+    );
+
+    const o = pickUnique(openers.length ? openers : ["我在听。"]);
+    const mid = pickUnique(middles.length ? middles : ["我接住了。"]);
+    const q = pickUnique(questions);
+
+    // Always ensure at least one key appears in the final reply when available
+    let reply = o + mid + q;
+    if (keys.length) {
+      const hasKey = keys.some((k) => reply.includes(k) || reply.includes("「" + k + "」"));
+      if (!hasKey) {
+        reply =
+          "你说到「" +
+          keys[0] +
+          "」。" +
+          mid +
+          (key0
+            ? "关于「" + key0 + "」，你还想补充哪一句？"
+            : q);
+      }
+    }
+    return reply;
+  }
+
   function ruleReply(text) {
     const t = (text || "").trim();
     if (!t) {
-      return "我在。你想说的时候，写一句就好。";
+      return commitReply("我在。你想说的时候，写一句就好。");
     }
-    if (detectCrisis(t)) return crisisReply();
+    if (detectCrisis(t)) return commitReply(crisisReply());
 
-    let matched = null;
-    for (const b of BUCKETS) {
-      if (b.re.test(t)) {
-        matched = b;
-        break;
-      }
+    const keys = extractKeywords(t);
+    const bucket = detectBucket(t);
+    if (bucket) {
+      sessionTheme = bucket.id;
+      lastBucket = bucket.id;
     }
+    rememberKeys(keys);
 
-    if (matched) {
-      if (matched.id === lastBucket && Math.random() < 0.45) {
-        lastBucket = matched.id;
-        return pick(FOLLOWUPS);
-      }
-      lastBucket = matched.id;
-      return pick(matched.replies);
+    if (!keys.length && t.length < 8) {
+      return commitReply(
+        "嗯，我在听。可以多写一点——发生了什么，或你现在身体什么感觉？"
+      );
     }
 
+    // Short text with keys still get reflection
+    const reply = buildReflective(t, keys, bucket);
+    return commitReply(reply);
+  }
+
+  function resetCompanionSession() {
     lastBucket = null;
-    if (t.length < 8) {
-      return "嗯，我在听。可以多写一点——发生了什么，或你现在身体什么感觉？";
-    }
-    return pick(GENERIC);
+    lastReplies = [];
+    sessionTheme = null;
+    turnCount = 0;
+    knownKeys = [];
   }
 
   function appendMsg(role, text, opts) {
@@ -397,7 +723,7 @@
 
   function clearChat() {
     webllmMessages = [{ role: "system", content: SYSTEM_PROMPT }];
-    lastBucket = null;
+    resetCompanionSession();
     el.log.innerHTML = "";
     appendMsg("bot", GREETING);
     setStatus(
@@ -490,6 +816,15 @@
       }
     });
   }
+
+  window.VentCompanion = {
+    ruleReply,
+    extractKeywords,
+    resetSession: resetCompanionSession,
+    getTheme: () => sessionTheme,
+    getLastReplies: () => lastReplies.slice(),
+    getKnownKeys: () => knownKeys.slice(),
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", wire);

@@ -180,19 +180,34 @@
     });
   }
 
-  /* —— Calm kit audio —— */
+  /* —— Calm kit audio (Web Audio noise; unlock on gesture) —— */
   let calmCtx = null;
   let calmNodes = null;
   let walkTimer = null;
   let walkEnds = 0;
+  let calmAnalyser = null; // for self-test / level meter
 
-  function ensureCalmCtx() {
-    if (window.Vent && Vent.ensureAudio) return Vent.ensureAudio();
+  function ensureCalmCtxSync() {
+    if (window.Vent && Vent.ensureAudio) {
+      const c = Vent.ensureAudio();
+      if (c) return c;
+    }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     if (!calmCtx) calmCtx = new AC();
-    if (calmCtx.state === "suspended") calmCtx.resume();
     return calmCtx;
+  }
+
+  function ensureCalmCtx() {
+    if (window.Vent && typeof Vent.ensureAudioAsync === "function") {
+      return Vent.ensureAudioAsync();
+    }
+    const ctx = ensureCalmCtxSync();
+    if (!ctx) return Promise.resolve(null);
+    if (ctx.state === "suspended") {
+      return ctx.resume().then(() => ctx).catch(() => ctx);
+    }
+    return Promise.resolve(ctx);
   }
 
   function stopSoundscape() {
@@ -202,48 +217,146 @@
       } catch (_) {}
       calmNodes = null;
     }
+    calmAnalyser = null;
     document.querySelectorAll(".calm-tile.is-on").forEach((t) => {
       t.classList.remove("is-on");
       t.setAttribute("aria-pressed", "false");
     });
   }
 
-  function startNoise(kind) {
-    const ctx = ensureCalmCtx();
-    if (!ctx) return;
-    stopSoundscape();
-    const bufferSize = ctx.sampleRate * 2;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  function makeNoiseBuffer(ctx, seconds, colored) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    src.loop = true;
-    const filter = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    gain.gain.value = kind === "rain" ? 0.12 : 0.08;
-    if (kind === "rain") {
-      filter.type = "bandpass";
-      filter.frequency.value = 1200;
-      filter.Q.value = 0.6;
-    } else {
-      filter.type = "lowpass";
-      filter.frequency.value = 800;
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1;
+      if (colored === "pink") {
+        // simple pink-ish: leaky integrator
+        last = (last + 0.02 * white) / 1.02;
+        data[i] = last * 3.5;
+      } else if (colored === "rain") {
+        // denser drops + hiss
+        const drop = Math.random() < 0.015 ? (Math.random() * 2 - 1) * 0.9 : 0;
+        last = last * 0.92 + white * 0.18;
+        data[i] = last * 0.55 + drop;
+      } else {
+        data[i] = white;
+      }
     }
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-    src.start();
+    return buffer;
+  }
+
+  async function startNoise(kind) {
+    const ctx = await ensureCalmCtx();
+    if (!ctx) {
+      setCalmStatus("这台设备播不了声景。");
+      return false;
+    }
+    if (ctx.state === "suspended") {
+      try {
+        await ctx.resume();
+      } catch (_) {}
+    }
+    stopSoundscape();
+
+    const master = ctx.createGain();
+    // Audible but not harsh; was ~0.08–0.12 and often felt silent after filters
+    master.gain.value = 0.0001;
+    const target = kind === "rain" ? 0.42 : 0.32;
+    master.gain.exponentialRampToValueAtTime(target, ctx.currentTime + 0.08);
+
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    calmAnalyser = analyser;
+
+    const nodes = [];
+    if (kind === "rain") {
+      const hiss = ctx.createBufferSource();
+      hiss.buffer = makeNoiseBuffer(ctx, 3, "rain");
+      hiss.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1600;
+      bp.Q.value = 0.55;
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 400;
+      const g1 = ctx.createGain();
+      g1.gain.value = 0.85;
+      hiss.connect(hp);
+      hp.connect(bp);
+      bp.connect(g1);
+      g1.connect(analyser);
+      hiss.start();
+      nodes.push(hiss, bp, hp, g1);
+
+      // Low rumble layer
+      const rumble = ctx.createBufferSource();
+      rumble.buffer = makeNoiseBuffer(ctx, 2, "pink");
+      rumble.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 280;
+      const g2 = ctx.createGain();
+      g2.gain.value = 0.35;
+      rumble.connect(lp);
+      lp.connect(g2);
+      g2.connect(analyser);
+      rumble.start();
+      nodes.push(rumble, lp, g2);
+    } else {
+      const src = ctx.createBufferSource();
+      src.buffer = makeNoiseBuffer(ctx, 2, "white");
+      src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 2400;
+      const g = ctx.createGain();
+      g.gain.value = 1;
+      src.connect(lp);
+      lp.connect(g);
+      g.connect(analyser);
+      src.start();
+      nodes.push(src, lp, g);
+    }
+
+    analyser.connect(master);
+    master.connect(ctx.destination);
+
     calmNodes = {
+      kind,
+      ctx,
+      master,
+      analyser,
       stop() {
+        nodes.forEach((n) => {
+          try {
+            if (n.stop) n.stop();
+          } catch (_) {}
+          try {
+            n.disconnect();
+          } catch (_) {}
+        });
         try {
-          src.stop();
-          src.disconnect();
-          filter.disconnect();
-          gain.disconnect();
+          analyser.disconnect();
+          master.disconnect();
         } catch (_) {}
       },
     };
+    return true;
+  }
+
+  /** Peak level 0–1 for tests */
+  function calmLevel() {
+    if (!calmAnalyser) return 0;
+    const data = new Uint8Array(calmAnalyser.frequencyBinCount);
+    calmAnalyser.getByteTimeDomainData(data);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) {
+      peak = Math.max(peak, Math.abs(data[i] - 128));
+    }
+    return peak / 128;
   }
 
   function setCalmStatus(msg) {
@@ -286,16 +399,18 @@
   const btnStopCalm = document.getElementById("btnStopCalm");
 
   if (btnRain) {
-    btnRain.addEventListener("click", () => {
-      startNoise("rain");
+    btnRain.addEventListener("click", async () => {
+      const ok = await startNoise("rain");
+      if (!ok) return;
       btnRain.classList.add("is-on");
       btnRain.setAttribute("aria-pressed", "true");
       setCalmStatus("雨声开着。再点「停止声景」可关掉。");
     });
   }
   if (btnNoise) {
-    btnNoise.addEventListener("click", () => {
-      startNoise("white");
+    btnNoise.addEventListener("click", async () => {
+      const ok = await startNoise("white");
+      if (!ok) return;
       btnNoise.classList.add("is-on");
       btnNoise.setAttribute("aria-pressed", "true");
       setCalmStatus("白噪开着。");
@@ -327,6 +442,18 @@
     renderJournal,
     currentMood() {
       return mood ? Number(mood.value) : 5;
+    },
+  };
+
+  window.VentCalm = {
+    startNoise,
+    stopSoundscape,
+    calmLevel,
+    isPlaying() {
+      return !!calmNodes;
+    },
+    kind() {
+      return calmNodes && calmNodes.kind;
     },
   };
 
