@@ -11,6 +11,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
 </head>
 <body>
   <div class="rain" aria-hidden="true"></div>
@@ -61,6 +63,8 @@
         <button type="button" class="neon-btn magenta" id="btnShred" disabled>撕碎</button>
         <button type="button" class="neon-btn violet" id="btnVoid" disabled>吸入虚空</button>
         <button type="button" class="neon-btn cyan" id="btnBalloon" disabled>气球放飞</button>
+        <button type="button" class="neon-btn magenta" id="btnBurn" disabled>烧掉</button>
+        <button type="button" class="neon-btn violet" id="btnShatter" disabled>摔碎</button>
       </div>
     </section>
 
@@ -71,7 +75,7 @@
       <div class="panel-sign">
         <span class="sign-glow">情绪池</span>
       </div>
-      <p class="pool-lead">按住说话，松手就丢进池。泡泡会慢慢长大、往上飘。点泡泡听/暂停；点「炸」或等引信到点才炸掉。录音只在本机，刷新即清空。</p>
+      <p class="pool-lead">按住说话，松手丢进池。泡泡会慢慢长大、往上飘。点泡泡听/暂停；点「炸」或等引信到点才炸掉。录音只在本机、可留在本地跨刷新；可一键清空。</p>
 
       <div class="pool-controls">
         <div class="pool-row">
@@ -90,7 +94,10 @@
             <button type="button" class="chip" data-voice="f2m">女变男</button>
             <button type="button" class="chip" data-voice="helium">卡通娃娃</button>
             <button type="button" class="chip" data-voice="monster">大叔怪兽</button>
+            <button type="button" class="chip" data-voice="alien">外星人</button>
+            <button type="button" class="chip" data-voice="phone">电话筒</button>
             <button type="button" class="chip" data-voice="robot">电音颤音</button>
+            <button type="button" class="chip" data-voice="choir">叠声合唱</button>
             <button type="button" class="chip" data-voice="echo">回声搞笑</button>
           </div>
         </div>
@@ -99,11 +106,7 @@
       <div class="wx-rec" id="wxRec">
         <div class="wx-rec-hud" id="wxRecHud" hidden>
           <p class="wx-rec-tip" id="wxRecTip">松开发送</p>
-          <div class="wx-rec-meter" aria-hidden="true">
-            <span class="wx-bar"></span><span class="wx-bar"></span><span class="wx-bar"></span>
-            <span class="wx-bar"></span><span class="wx-bar"></span><span class="wx-bar"></span>
-            <span class="wx-bar"></span>
-          </div>
+          <canvas class="wx-wave" id="wxWave" width="280" height="56" aria-hidden="true"></canvas>
           <p class="wx-rec-time" id="wxRecTime">0:00</p>
         </div>
         <button type="button" class="wx-hold-btn" id="btnPoolRec" aria-label="按住说话">
@@ -114,9 +117,10 @@
       <div class="pool-record-bar pool-after-rec">
         <button type="button" class="neon-btn cyan" id="btnPoolPreview" disabled>试听变声</button>
         <button type="button" class="neon-btn violet" id="btnPoolDrop" disabled>再丢一颗</button>
+        <button type="button" class="ghost-btn pool-wipe" id="btnPoolWipe">清空本地池</button>
       </div>
       <p class="pool-status" id="poolStatus" role="status">先选引信和搞笑变声，再按住说话。池空着就按住录一段吧。</p>
-      <p class="privacy-note" role="note">语音气泡仅保存在本页内存，关闭或刷新即消失；不会上传服务器。</p>
+      <p class="privacy-note" role="note">语音气泡只存在本机（IndexedDB）。可跨刷新保留；点「清空本地池」永久删除。不会上传。</p>
 
       <div class="pool-tank" id="poolTank" aria-label="情绪泡泡池">
         <canvas class="pool-fx" id="poolFx" aria-hidden="true"></canvas>
@@ -187,6 +191,16 @@
       <button type="button" class="ghost-btn" id="btnOfferNo">先不用</button>
     </div>
 
+    <aside class="help-chip" id="helpChip">
+      <button type="button" class="help-chip-btn" id="btnHelpChip" aria-expanded="false" aria-controls="helpPanel">需要帮助</button>
+      <div class="help-panel" id="helpPanel" hidden>
+        <p>若持续很难受，或有伤害自己的念头，请尽快联系专业支持（本页不能替代医疗）。</p>
+        <p><a href="tel:4001619995">400-161-9995</a> 希望24热线</p>
+        <p><a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线</a></p>
+        <button type="button" class="ghost-btn" id="btnHelpClose">收起</button>
+      </div>
+    </aside>
+
     <footer class="footer">
       <p class="disclaimer">
         本页仅供情绪疏导小练习，不能替代专业心理咨询或医疗建议。
@@ -221,6 +235,7 @@
     </div>
   </div>
 
+  <script src="js/pitch.js"></script>
   <script src="js/app.js"></script>
   <script src="js/games.js"></script>
   <script src="js/pool.js"></script>

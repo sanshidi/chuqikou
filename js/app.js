@@ -10,6 +10,9 @@
   const btnShred = document.getElementById("btnShred");
   const btnVoid = document.getElementById("btnVoid");
   const btnBalloon = document.getElementById("btnBalloon");
+  const btnBurn = document.getElementById("btnBurn");
+  const btnShatter = document.getElementById("btnShatter");
+  const shredOverlay = document.getElementById("shredOverlay");
   const balloonLayer = document.getElementById("balloonLayer");
   const mood = document.getElementById("mood");
   const moodValue = document.getElementById("moodValue");
@@ -72,6 +75,50 @@
   })();
 
   /* —— Shared API for games —— */
+  const STATS_KEY = "chuqikou-game-stats-v1";
+
+  function loadStats() {
+    try {
+      return JSON.parse(localStorage.getItem(STATS_KEY) || "{}") || {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveStats(s) {
+    try {
+      localStorage.setItem(STATS_KEY, JSON.stringify(s));
+    } catch (_) {}
+  }
+
+  function vibrate(ms) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(ms || 12);
+    } catch (_) {}
+  }
+
+  /** Record a hit for combo/best — local only */
+  function recordHit(gameId, opts) {
+    const o = opts || {};
+    const stats = loadStats();
+    const g = stats[gameId] || { hits: 0, bestCombo: 0, sessions: 0 };
+    const now = Date.now();
+    if (!g._comboUntil || now > g._comboUntil) g._combo = 0;
+    g._combo = (g._combo || 0) + 1;
+    g._comboUntil = now + (o.comboWindowMs || 900);
+    g.hits = (g.hits || 0) + 1;
+    if (g._combo > (g.bestCombo || 0)) g.bestCombo = g._combo;
+    stats[gameId] = g;
+    saveStats(stats);
+    if (o.vibrate !== false) vibrate(o.vibrateMs || 10);
+    return { combo: g._combo, bestCombo: g.bestCombo, hits: g.hits };
+  }
+
+  function getGameStats(gameId) {
+    const g = loadStats()[gameId] || {};
+    return { hits: g.hits || 0, bestCombo: g.bestCombo || 0 };
+  }
+
   const Vent = {
     ensureAudio,
     playThud,
@@ -82,6 +129,9 @@
     playTick,
     playWoodChime,
     reducedMotion: () => reducedMotion,
+    vibrate,
+    recordHit,
+    getGameStats,
     setStat(text) {
       gameStat.textContent = text || "";
     },
@@ -94,9 +144,9 @@
 
   function syncDestroyButtons() {
     const has = ventText.value.trim().length > 0 && !destroying;
-    btnShred.disabled = !has;
-    btnVoid.disabled = !has;
-    btnBalloon.disabled = !has;
+    [btnShred, btnVoid, btnBalloon, btnBurn, btnShatter].forEach((b) => {
+      if (b) b.disabled = !has;
+    });
   }
 
   ventText.addEventListener("input", syncDestroyButtons);
@@ -308,9 +358,36 @@
 
   function afterDestroy() {
     destroying = false;
-    textareaWrap.classList.remove("is-shredding", "is-voiding", "is-ballooning");
+    textareaWrap.classList.remove(
+      "is-shredding",
+      "is-voiding",
+      "is-ballooning",
+      "is-burning",
+      "is-shattering"
+    );
+    if (shredOverlay) {
+      shredOverlay.innerHTML = "";
+      shredOverlay.className = "shred-overlay";
+    }
     clearVentText();
     showOfferBreathe();
+  }
+
+  function spawnDestroyParticles(kind) {
+    if (!shredOverlay || reducedMotion) return;
+    shredOverlay.className = "shred-overlay is-on is-" + kind;
+    shredOverlay.innerHTML = "";
+    const n = kind === "shatter" ? 28 : kind === "burn" ? 22 : 18;
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement("span");
+      p.className = "destroy-particle";
+      p.style.left = Math.random() * 100 + "%";
+      p.style.top = Math.random() * 100 + "%";
+      p.style.setProperty("--dx", (Math.random() * 160 - 80).toFixed(1) + "px");
+      p.style.setProperty("--dy", (Math.random() * 140 - 40).toFixed(1) + "px");
+      p.style.animationDelay = (Math.random() * 0.15).toFixed(2) + "s";
+      shredOverlay.appendChild(p);
+    }
   }
 
   function runShred() {
@@ -319,8 +396,10 @@
     syncDestroyButtons();
     ensureAudio();
     playCrack();
+    vibrate(18);
+    spawnDestroyParticles("shred");
     textareaWrap.classList.add("is-shredding");
-    setTimeout(afterDestroy, reducedMotion ? 200 : 750);
+    setTimeout(afterDestroy, reducedMotion ? 200 : 900);
   }
 
   function runVoid() {
@@ -329,8 +408,10 @@
     syncDestroyButtons();
     ensureAudio();
     playWhoosh();
+    vibrate(14);
+    spawnDestroyParticles("void");
     textareaWrap.classList.add("is-voiding");
-    setTimeout(afterDestroy, reducedMotion ? 200 : 800);
+    setTimeout(afterDestroy, reducedMotion ? 200 : 950);
   }
 
   function runBalloon() {
@@ -339,23 +420,52 @@
     syncDestroyButtons();
     ensureAudio();
     playWhoosh();
+    vibrate(12);
     textareaWrap.classList.add("is-ballooning");
-    const emojis = ["🎈", "🎈", "💨", "✨"];
-    for (let i = 0; i < 5; i++) {
+    const emojis = ["🎈", "🎈", "💨", "✨", "🫧"];
+    for (let i = 0; i < 8; i++) {
       const el = document.createElement("span");
       el.className = "fly-balloon";
       el.textContent = emojis[i % emojis.length];
-      el.style.left = 15 + Math.random() * 70 + "%";
-      el.style.animationDelay = i * 0.12 + "s";
+      el.style.left = 8 + Math.random() * 84 + "%";
+      el.style.animationDelay = i * 0.08 + "s";
+      el.style.fontSize = 1.4 + Math.random() * 1.2 + "rem";
       balloonLayer.appendChild(el);
-      setTimeout(() => el.remove(), 2500);
+      setTimeout(() => el.remove(), 2600);
     }
-    setTimeout(afterDestroy, reducedMotion ? 200 : 900);
+    setTimeout(afterDestroy, reducedMotion ? 200 : 1000);
+  }
+
+  function runBurn() {
+    if (destroying || !ventText.value.trim()) return;
+    destroying = true;
+    syncDestroyButtons();
+    ensureAudio();
+    playCrack();
+    playWhoosh();
+    vibrate(22);
+    spawnDestroyParticles("burn");
+    textareaWrap.classList.add("is-burning");
+    setTimeout(afterDestroy, reducedMotion ? 220 : 1100);
+  }
+
+  function runShatter() {
+    if (destroying || !ventText.value.trim()) return;
+    destroying = true;
+    syncDestroyButtons();
+    ensureAudio();
+    playCrack();
+    vibrate([10, 30, 18]);
+    spawnDestroyParticles("shatter");
+    textareaWrap.classList.add("is-shattering");
+    setTimeout(afterDestroy, reducedMotion ? 220 : 1000);
   }
 
   btnShred.addEventListener("click", runShred);
   btnVoid.addEventListener("click", runVoid);
   btnBalloon.addEventListener("click", runBalloon);
+  if (btnBurn) btnBurn.addEventListener("click", runBurn);
+  if (btnShatter) btnShatter.addEventListener("click", runShatter);
 
   /* —— Breathing —— */
   function showOfferBreathe() {
@@ -489,6 +599,32 @@
       showOfferBreathe();
     }
   });
+
+
+  /* —— Subtle crisis affordance —— */
+  const btnHelpChip = document.getElementById("btnHelpChip");
+  const helpPanel = document.getElementById("helpPanel");
+  const btnHelpClose = document.getElementById("btnHelpClose");
+  if (btnHelpChip && helpPanel) {
+    btnHelpChip.addEventListener("click", () => {
+      const willOpen = helpPanel.hidden;
+      helpPanel.hidden = !willOpen;
+      btnHelpChip.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+    if (btnHelpClose) {
+      btnHelpClose.addEventListener("click", () => {
+        helpPanel.hidden = true;
+        btnHelpChip.setAttribute("aria-expanded", "false");
+      });
+    }
+  }
+
+  /* —— PWA —— */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
 
   syncDestroyButtons();
 })();

@@ -29,11 +29,13 @@
     const btn = wrap.querySelector(".punch-bag-btn");
     const face = wrap.querySelector(".bag-face");
     const faces = ["😤", "😠", "💢", "😮", "😳", "😌"];
-    vent.setStat("已打 0 下");
+    const best = (vent.getGameStats && vent.getGameStats("bag").bestCombo) || 0;
+    vent.setStat("已打 0 下 · 最佳连击 " + best);
 
     function hit() {
       count++;
-      vent.setStat("已打 " + count + " 下");
+      const st = vent.recordHit ? vent.recordHit("bag", { vibrateMs: 12 }) : { combo: count, bestCombo: best, hits: count };
+      vent.setStat("已打 " + count + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
       vent.playThud(Math.min(1, 0.4 + (count % 5) * 0.12));
       btn.classList.add("is-hit");
       face.textContent = faces[Math.min(faces.length - 1, Math.floor(count / 3) % faces.length)];
@@ -72,9 +74,11 @@
         if (b.classList.contains("popped")) return;
         b.classList.add("popped");
         popped++;
+        const st = vent.recordHit ? vent.recordHit("bubble", { vibrateMs: 8, comboWindowMs: 600 }) : null;
         vent.playPop();
-        vent.setStat("戳破 " + popped + " / " + total);
-        if (popped >= total) vent.setStat("全破完了 · 再来一局？");
+        const comboBit = st ? " · 连击 " + st.combo : "";
+        vent.setStat("戳破 " + popped + " / " + total + comboBit);
+        if (popped >= total) vent.setStat("全破完了 · 最佳连击 " + ((st && st.bestCombo) || popped));
       });
       grid.appendChild(b);
     }
@@ -122,7 +126,8 @@
     function shatter(p, cx, cy) {
       p.alive = false;
       smashed++;
-      vent.setStat("砸碎 " + smashed + " 只");
+      const st = vent.recordHit ? vent.recordHit("plates", { vibrateMs: 16 }) : null;
+      vent.setStat("砸碎 " + smashed + " 只" + (st ? " · 连击 " + st.combo : ""));
       vent.playCrack();
       for (let i = 0; i < 14; i++) {
         const ang = rand(0, Math.PI * 2);
@@ -241,7 +246,9 @@
       if (meter >= 100) return;
       meter = Math.min(100, meter + n);
       fill.style.width = meter + "%";
-      vent.setStat("怒气 " + Math.floor(meter) + "% · 爆发 " + bursts + " 次");
+      if (vent.recordHit) vent.recordHit("rage", { vibrateMs: 6, comboWindowMs: 400 });
+      const bestR = vent.getGameStats ? vent.getGameStats("rage").bestCombo : 0;
+      vent.setStat("怒气 " + Math.floor(meter) + "% · 爆发 " + bursts + " 次 · 最佳连击 " + bestR);
       vent.playTick();
       if (meter >= 100) {
         prompt.textContent = "满了！点一下释放！";
@@ -330,7 +337,8 @@
       ball.classList.remove("is-squeezing");
       cancelAnimationFrame(raf);
       squeezes++;
-      vent.setStat("捏了 " + squeezes + " 下");
+      const st = vent.recordHit ? vent.recordHit("squeeze", { vibrateMs: 14, comboWindowMs: 1200 }) : null;
+      vent.setStat("捏了 " + squeezes + " 下" + (st ? " · 连击 " + st.combo + " · 最佳 " + st.bestCombo : ""));
       vent.playPop();
       scaleX = 1;
       scaleY = 1;
@@ -427,8 +435,13 @@
       else rhythm.textContent = "慢慢来就好";
       lastHit = now;
       hits++;
+      const st = vent.recordHit ? vent.recordHit("muyu", { vibrateMs: 9, comboWindowMs: 1400 }) : null;
       vent.playWoodChime();
-      vent.setStat("敲了 " + hits + " 下" + (bestStreak >= 3 ? " · 稳拍 " + bestStreak : ""));
+      vent.setStat(
+        "敲了 " + hits + " 下" +
+        (bestStreak >= 3 ? " · 稳拍 " + bestStreak : "") +
+        (st ? " · 最佳连击 " + st.bestCombo : "")
+      );
       if (hits % 5 === 0) {
         line.textContent = lines[(hits / 5 | 0) % lines.length];
       }

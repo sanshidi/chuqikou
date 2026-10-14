@@ -59,6 +59,10 @@ https://sanshidi.github.io/chuqikou/
 
 公共动态、聊天、AI、账号、上传用户内容、具象打人。
 
+## PWA
+
+可安装到主屏幕（`manifest.webmanifest` + `sw.js` 离线缓存静态资源）。录音数据仍只在本机 IndexedDB。
+
 ## 移动端
 
 为减少误触放大，页面 `viewport` 设为 `maximum-scale=1, user-scalable=no`；需要系统级放大可改用系统辅助功能。按住说话区域使用 `touch-action: none`，不受影响。

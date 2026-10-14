@@ -19,18 +19,113 @@
   const wxTime = document.getElementById("wxRecTime");
   const wxHoldLabel = document.getElementById("wxHoldLabel");
   const wxRec = document.getElementById("wxRec");
+  const wxWave = document.getElementById("wxWave");
+  const btnWipe = document.getElementById("btnPoolWipe");
   if (!tank || !btnRec) return;
 
-  /* Comedy gag presets — obvious, not studio-subtle */
+  /* Comedy gag presets — pitch-first (same tempo) + FX */
   const VOICE_PRESETS = {
-    normal: { label: "原声", rate: 1, detune: 0, filter: null, echo: false, tremolo: 0 },
-    m2f: { label: "男变女", rate: 1.62, detune: 280, filter: "bright", echo: false, tremolo: 0 },
-    f2m: { label: "女变男", rate: 0.62, detune: -220, filter: "dark", echo: false, tremolo: 0 },
-    helium: { label: "卡通娃娃", rate: 1.92, detune: 420, filter: "helium", echo: false, tremolo: 0 },
-    monster: { label: "大叔怪兽", rate: 0.48, detune: -380, filter: "monster", echo: false, tremolo: 0 },
-    robot: { label: "电音颤音", rate: 1.08, detune: 60, filter: "robot", echo: false, tremolo: 14 },
-    echo: { label: "回声搞笑", rate: 1.1, detune: 40, filter: null, echo: true, tremolo: 0 },
+    normal: { label: "原声", semitones: 0, rate: 1, filter: null, echo: false, tremolo: 0 },
+    m2f: { label: "男变女", semitones: 7, rate: 1, filter: "bright", echo: false, tremolo: 0 },
+    f2m: { label: "女变男", semitones: -5, rate: 1, filter: "dark", echo: false, tremolo: 0 },
+    helium: { label: "卡通娃娃", semitones: 10, rate: 1, filter: "helium", echo: false, tremolo: 0 },
+    monster: { label: "大叔怪兽", semitones: -8, rate: 1, filter: "monster", echo: false, tremolo: 0 },
+    alien: { label: "外星人", semitones: 6, rate: 1, filter: "bright", echo: false, tremolo: 9 },
+    phone: { label: "电话筒", semitones: 0, rate: 1, filter: "phone", echo: false, tremolo: 0 },
+    robot: { label: "电音颤音", semitones: 2, rate: 1, filter: "robot", echo: false, tremolo: 14 },
+    choir: { label: "叠声合唱", semitones: 0, rate: 1, filter: null, echo: false, tremolo: 0, choir: true },
+    echo: { label: "回声搞笑", semitones: 1, rate: 1, filter: null, echo: true, tremolo: 0 },
   };
+
+  const IDB_NAME = "chuqikou-pool-v1";
+  const IDB_STORE = "bubbles";
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("no idb"));
+        return;
+      }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbPut(rec) {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(rec);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    } catch (_) {}
+  }
+
+  async function idbDelete(id) {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    } catch (_) {}
+  }
+
+  async function idbClear() {
+    try {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    } catch (_) {}
+  }
+
+  async function idbAll() {
+    try {
+      const db = await idbOpen();
+      const rows = await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return rows;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function persistBubble(item) {
+    try {
+      const audio = await item.blob.arrayBuffer();
+      await idbPut({
+        id: item.id,
+        voice: item.voice,
+        createdAt: item.createdAt,
+        explodeAt: item.explodeAt,
+        mime: item.blob.type || "audio/wav",
+        audio,
+      });
+    } catch (_) {}
+  }
 
   const MIN_SIZE = 52;
   const MAX_SIZE = 118;
@@ -189,90 +284,121 @@
       f.type = "bandpass";
       f.frequency.value = 1100;
       f.Q.value = 4.5;
+    } else if (filterKind === "phone") {
+      f.type = "bandpass";
+      f.frequency.value = 1400;
+      f.Q.value = 0.85;
     }
     return f;
   }
 
   /**
-   * Play with gag voice. Returns { stop, getOffset }.
+   * Play with gag voice (pitch-shift same tempo when VentPitch available).
    */
   async function playWithVoice(blob, voice, offsetSec, onEnded) {
     const ctx = ensureCtx();
     if (!ctx || !blob) return null;
     const ab = await blob.arrayBuffer();
-    const buffer = await ctx.decodeAudioData(ab.slice(0));
+    let buffer = await ctx.decodeAudioData(ab.slice(0));
     const preset = VOICE_PRESETS[voice] || VOICE_PRESETS.normal;
-    const rate = preset.rate;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = rate;
-    try {
-      source.detune.value = preset.detune || 0;
-    } catch (_) {}
+    const rate = preset.rate || 1;
+    if (preset.semitones && window.VentPitch) {
+      try {
+        buffer = VentPitch.shiftSemitones(buffer, preset.semitones, ctx);
+      } catch (_) {}
+    }
 
     const extras = [];
     const master = ctx.createGain();
     master.gain.value = 1;
     extras.push(master);
-
-    let node = source;
-    const filt = applyFilter(ctx, preset.filter);
-    if (filt) {
-      extras.push(filt);
-      node.connect(filt);
-      node = filt;
-    }
-
+    const sources = [];
     let lfo = null;
-    if (preset.tremolo > 0) {
-      const tremolo = ctx.createGain();
-      tremolo.gain.value = 0.55;
-      extras.push(tremolo);
-      lfo = ctx.createOscillator();
-      lfo.type = "sine";
-      lfo.frequency.value = preset.tremolo;
-      const lfoDepth = ctx.createGain();
-      lfoDepth.gain.value = 0.45;
-      extras.push(lfoDepth);
-      lfo.connect(lfoDepth);
-      lfoDepth.connect(tremolo.gain);
-      node.connect(tremolo);
-      node = tremolo;
-      lfo.start();
+
+    function chainFrom(source) {
+      source.playbackRate.value = rate;
+      let node = source;
+      const filt = applyFilter(ctx, preset.filter);
+      if (filt) {
+        extras.push(filt);
+        node.connect(filt);
+        node = filt;
+      }
+      if (preset.tremolo > 0) {
+        const tremolo = ctx.createGain();
+        tremolo.gain.value = 0.55;
+        extras.push(tremolo);
+        if (!lfo) {
+          lfo = ctx.createOscillator();
+          lfo.type = "sine";
+          lfo.frequency.value = preset.tremolo;
+          const lfoDepth = ctx.createGain();
+          lfoDepth.gain.value = 0.45;
+          extras.push(lfoDepth);
+          lfo.connect(lfoDepth);
+          lfoDepth.connect(tremolo.gain);
+          lfo.start();
+        }
+        node.connect(tremolo);
+        node = tremolo;
+      }
+      if (preset.echo) {
+        const dry = ctx.createGain();
+        dry.gain.value = 0.75;
+        const delay = ctx.createDelay(1.2);
+        delay.delayTime.value = 0.28;
+        const fb = ctx.createGain();
+        fb.gain.value = 0.48;
+        const wet = ctx.createGain();
+        wet.gain.value = 0.7;
+        extras.push(dry, delay, fb, wet);
+        node.connect(dry);
+        dry.connect(master);
+        node.connect(delay);
+        delay.connect(fb);
+        fb.connect(delay);
+        delay.connect(wet);
+        wet.connect(master);
+      } else {
+        node.connect(master);
+      }
+      return source;
     }
 
-    if (preset.echo) {
-      const dry = ctx.createGain();
-      dry.gain.value = 0.75;
-      const delay = ctx.createDelay(1.2);
-      delay.delayTime.value = 0.28;
-      const fb = ctx.createGain();
-      fb.gain.value = 0.48;
-      const wet = ctx.createGain();
-      wet.gain.value = 0.7;
-      const delay2 = ctx.createDelay(1.2);
-      delay2.delayTime.value = 0.52;
-      const wet2 = ctx.createGain();
-      wet2.gain.value = 0.4;
-      extras.push(dry, delay, fb, wet, delay2, wet2);
-      node.connect(dry);
-      dry.connect(master);
-      node.connect(delay);
-      delay.connect(fb);
-      fb.connect(delay);
-      delay.connect(wet);
-      wet.connect(master);
-      node.connect(delay2);
-      delay2.connect(wet2);
-      wet2.connect(master);
-    } else {
-      node.connect(master);
-    }
-    master.connect(ctx.destination);
-
-    const startAt = ctx.currentTime;
     const off = Math.max(0, Math.min(offsetSec || 0, Math.max(0, buffer.duration - 0.02)));
-    source.start(0, off);
+    if (preset.choir) {
+      const shifts = [-3, 0, 4];
+      const gains = [0.45, 0.9, 0.42];
+      shifts.forEach((st, idx) => {
+        let buf = buffer;
+        if (st && window.VentPitch) {
+          try {
+            buf = VentPitch.shiftSemitones(buffer, st, ctx);
+          } catch (_) {}
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = rate;
+        const g = ctx.createGain();
+        g.gain.value = gains[idx];
+        const d = ctx.createDelay(0.06);
+        d.delayTime.value = idx * 0.014;
+        extras.push(g, d);
+        src.connect(d);
+        d.connect(g);
+        g.connect(master);
+        sources.push(src);
+      });
+    } else {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      chainFrom(source);
+      sources.push(source);
+    }
+
+    master.connect(ctx.destination);
+    const startAt = ctx.currentTime;
+    sources.forEach((s) => s.start(0, off));
     let stopped = false;
     const durationAtRate = (buffer.duration - off) / rate;
     const endWatch = setTimeout(() => {
@@ -281,8 +407,7 @@
         onEnded();
       }
     }, durationAtRate * 1000 + 80);
-
-    source.onended = () => {
+    sources[0].onended = () => {
       clearTimeout(endWatch);
       if (stopped) return;
       stopped = true;
@@ -290,7 +415,8 @@
     };
 
     return {
-      source,
+      source: sources[0],
+      sources,
       lfo,
       extras,
       buffer,
@@ -301,7 +427,14 @@
         if (stopped) return;
         stopped = true;
         clearTimeout(endWatch);
-        stopGraph({ source, lfo, extras });
+        sources.forEach((s) => {
+          try {
+            s.onended = null;
+            s.stop();
+            s.disconnect();
+          } catch (_) {}
+        });
+        stopGraph({ source: null, lfo, extras });
       },
       getOffset() {
         const elapsed = (ctx.currentTime - startAt) * rate;
@@ -363,7 +496,7 @@
     capComp.attack.value = 0.003;
     capComp.release.value = 0.18;
     capAnalyser = capCtx.createAnalyser();
-    capAnalyser.fftSize = 256;
+    capAnalyser.fftSize = 2048;
     capDest = capCtx.createMediaStreamDestination();
     capSource.connect(capGain);
     capGain.connect(capComp);
@@ -374,17 +507,54 @@
 
   function pulseMeter() {
     if (!capAnalyser || !recording) return;
-    const data = new Uint8Array(capAnalyser.frequencyBinCount);
-    capAnalyser.getByteFrequencyData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) sum += data[i];
-    const avg = sum / data.length / 255;
-    const bars = wxRec ? wxRec.querySelectorAll(".wx-bar") : [];
-    bars.forEach((bar, i) => {
-      const h = 20 + avg * 70 * (0.5 + ((i * 17) % 10) / 10);
-      bar.style.height = Math.min(100, h) + "%";
-      bar.classList.toggle("is-loud", avg > 0.28);
-    });
+    if (wxWave) {
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = wxWave.clientWidth || 280;
+      const cssH = wxWave.clientHeight || 56;
+      if (wxWave.width !== Math.floor(cssW * dpr)) {
+        wxWave.width = Math.floor(cssW * dpr);
+        wxWave.height = Math.floor(cssH * dpr);
+      }
+      const c = wxWave.getContext("2d");
+      const w = wxWave.width;
+      const h = wxWave.height;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.clearRect(0, 0, w, h);
+      const grad = c.createLinearGradient(0, 0, w, 0);
+      if (cancelArmed) {
+        grad.addColorStop(0, "#ff3d7f");
+        grad.addColorStop(1, "#ffe566");
+      } else {
+        grad.addColorStop(0, "#5ce1e6");
+        grad.addColorStop(0.5, "#c4a8ff");
+        grad.addColorStop(1, "#ff3d7f");
+      }
+      // time-domain wave
+      const td = new Uint8Array(capAnalyser.fftSize);
+      capAnalyser.getByteTimeDomainData(td);
+      c.lineWidth = Math.max(2, 2 * dpr);
+      c.strokeStyle = grad;
+      c.shadowColor = cancelArmed ? "rgba(255,61,127,0.55)" : "rgba(92,225,230,0.45)";
+      c.shadowBlur = 8 * dpr;
+      c.beginPath();
+      const step = Math.max(1, Math.floor(td.length / w));
+      for (let x = 0; x < w; x++) {
+        const v = td[x * step] / 128;
+        const y = (v * h) / 2;
+        if (x === 0) c.moveTo(x, y);
+        else c.lineTo(x, y);
+      }
+      c.stroke();
+      // soft mirrored fill
+      c.globalAlpha = 0.2;
+      c.fillStyle = grad;
+      c.lineTo(w, h / 2);
+      c.lineTo(0, h / 2);
+      c.closePath();
+      c.fill();
+      c.globalAlpha = 1;
+      c.shadowBlur = 0;
+    }
     meterRaf = requestAnimationFrame(pulseMeter);
   }
 
@@ -738,9 +908,9 @@
     return "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
-  function addBubble(blob, voice) {
-    const now = Date.now();
-    const id = uid();
+  function addBubble(blob, voice, saved) {
+    const now = (saved && saved.createdAt) || Date.now();
+    const id = (saved && saved.id) || uid();
     const el = document.createElement("div");
     el.className = "pool-bubble";
     el.dataset.id = id;
@@ -773,7 +943,7 @@
       blob,
       voice,
       createdAt: now,
-      explodeAt: fuseExplodeAt(now),
+      explodeAt: (saved && saved.explodeAt) || fuseExplodeAt(now),
       el,
       core,
       boom,
@@ -829,6 +999,7 @@
     emptyEl.hidden = true;
     ensureLoop();
     updateBubbleVisual(item, 0);
+    if (!saved) persistBubble(item);
   }
 
   async function togglePlay(item) {
@@ -1007,6 +1178,7 @@
       () => {
         item.el.remove();
         bubbles.delete(id);
+        idbDelete(id);
         if (!bubbles.size) emptyEl.hidden = false;
       },
       reducedMotion ? 80 : 420
@@ -1097,6 +1269,60 @@
       if (bubbles.size) layoutBubbles(Date.now());
     }
   });
+
+
+  if (btnWipe) {
+    btnWipe.addEventListener("click", async () => {
+      if (!bubbles.size && !(await idbAll()).length) {
+        setStatus("池子已经是空的。");
+        return;
+      }
+      if (!window.confirm("清空本机情绪池？录音泡泡会从这台设备删掉，且不可恢复。")) return;
+      const ids = [...bubbles.keys()];
+      ids.forEach((id) => {
+        const item = bubbles.get(id);
+        if (!item) return;
+        if (item.playing && item.nodes) {
+          try {
+            item.nodes.stop();
+          } catch (_) {}
+        }
+        item.el.remove();
+        bubbles.delete(id);
+      });
+      await idbClear();
+      emptyEl.hidden = false;
+      pendingBlob = null;
+      lastBlob = null;
+      syncPendingButtons();
+      setStatus("本地池已清空。");
+    });
+  }
+
+  (async function restorePool() {
+    const rows = await idbAll();
+    const now = Date.now();
+    let restored = 0;
+    for (const row of rows) {
+      if (!row || !row.audio) continue;
+      if (row.explodeAt && row.explodeAt <= now) {
+        idbDelete(row.id);
+        continue;
+      }
+      try {
+        const blob = new Blob([row.audio], { type: row.mime || "audio/wav" });
+        addBubble(blob, row.voice || "normal", {
+          id: row.id,
+          createdAt: row.createdAt,
+          explodeAt: row.explodeAt,
+        });
+        restored++;
+      } catch (_) {
+        idbDelete(row.id);
+      }
+    }
+    if (restored) setStatus("已从本机恢复 " + restored + " 个泡泡。点「清空本地池」可删光。");
+  })();
 
   syncPendingButtons();
 })();
