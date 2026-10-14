@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="出气口 — 本地情绪发泄小工具。写完即毁，内容从不上传。" />
+  <meta name="theme-color" content="#1a1625" />
+  <title>出气口 · 写完就散</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="logo">出气口</h1>
+      <p class="tagline">写完就散 · 内容只留在本机</p>
+    </header>
+
+    <!-- P2: Mood intensity -->
+    <section class="mood-section" aria-label="情绪强度">
+      <label for="mood" class="mood-label">
+        此刻强度 <span id="moodValue" class="mood-value">5</span>
+      </label>
+      <input type="range" id="mood" min="0" max="10" value="5" class="mood-slider" />
+      <div class="mood-ends"><span>平静</span><span>很满</span></div>
+    </section>
+
+    <!-- P0: Write & destroy -->
+    <section class="vent-section" aria-label="写下情绪">
+      <label for="ventText" class="section-title">写下来，然后放走</label>
+      <div class="textarea-wrap" id="textareaWrap">
+        <textarea
+          id="ventText"
+          rows="5"
+          maxlength="2000"
+          placeholder="想说的、想骂的、堵着的……写在这里。不会上传，刷新即清空。"
+          autocomplete="off"
+          spellcheck="false"
+        ></textarea>
+        <div class="shred-overlay" id="shredOverlay" aria-hidden="true"></div>
+      </div>
+      <p class="privacy-note" role="note">
+        🔒 内容仅留在本机浏览器，刷新即清空；不上传服务器。
+      </p>
+      <div class="destroy-actions">
+        <button type="button" class="btn btn-shred" id="btnShred" disabled>
+          <span class="btn-icon">✂</span> 撕碎
+        </button>
+        <button type="button" class="btn btn-void" id="btnVoid" disabled>
+          <span class="btn-icon">◎</span> 吸入虚空
+        </button>
+        <button type="button" class="btn btn-balloon" id="btnBalloon" disabled>
+          <span class="btn-icon">🎈</span> 气球放飞
+        </button>
+      </div>
+    </section>
+
+    <!-- Balloon fly animation layer -->
+    <div class="balloon-layer" id="balloonLayer" aria-hidden="true"></div>
+
+    <!-- P1: Punching bag / stress ball -->
+    <section class="punch-section" aria-label="出气袋">
+      <h2 class="section-title">出气袋</h2>
+      <p class="hint">点按或连点，把劲儿打出去</p>
+      <div class="punch-area">
+        <button type="button" class="punch-bag" id="punchBag" aria-label="出气袋，点击发泄">
+          <span class="bag-body" id="bagBody">
+            <span class="bag-face" id="bagFace">😤</span>
+          </span>
+          <span class="bag-base"></span>
+        </button>
+        <div class="punch-stats">
+          <span>已打 <strong id="punchCount">0</strong> 下</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- P1: Breathing guide (shown after vent/punch optionally) -->
+    <section class="breathe-section" id="breatheSection" aria-label="呼吸引导" hidden>
+      <h2 class="section-title">缓一缓</h2>
+      <p class="hint" id="breatheHint">跟着圆圈：吸气…呼气…</p>
+      <div class="breathe-wrap">
+        <div class="breathe-circle" id="breatheCircle" aria-live="polite">
+          <span class="breathe-text" id="breatheText">准备</span>
+        </div>
+      </div>
+      <div class="breathe-actions">
+        <button type="button" class="btn btn-secondary" id="btnBreatheStart">开始 45 秒</button>
+        <button type="button" class="btn btn-ghost" id="btnBreatheSkip">跳过</button>
+      </div>
+    </section>
+
+    <!-- Offer breathe after destroy -->
+    <div class="offer-breathe" id="offerBreathe" hidden>
+      <p>写的已经散了。要不要跟着呼吸缓一会儿？</p>
+      <button type="button" class="btn btn-primary" id="btnOfferYes">好，呼吸一下</button>
+      <button type="button" class="btn btn-ghost" id="btnOfferNo">不用了</button>
+    </div>
+
+    <footer class="footer">
+      <p class="disclaimer">
+        本页仅供情绪疏导小练习，不能替代专业心理咨询或医疗建议。
+        若持续难受、有伤害自己的念头，请尽快寻求帮助。
+      </p>
+      <p class="hotlines">
+        危机支持（中国大陆）：
+        <a href="tel:4001619995">400-161-9995</a>
+        （希望24热线）·
+        <a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线</a>
+        · 心理援助热线
+        <a href="tel:4001619995">400-161-9995</a>
+      </p>
+      <p class="footer-meta">出气口 · 纯本地静态页 · 无账号 · 无上传</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
