@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="description" content="出气口 — 雨夜巷口的情绪释放站。写完即毁，情绪池语音泡泡，本地小游戏减压，内容从不上传。" />
+  <meta name="description" content="出气口 — 雨夜巷口的情绪释放站。写完即毁，树洞伙伴倾听，情绪池语音泡泡，本地小游戏减压，内容从不上传。" />
   <meta name="theme-color" content="#0c0a12" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230c0a12'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16'%3E%E5%87%BA%3C/text%3E%3C/svg%3E" />
   <title>出气口 · 雨夜巷口·写完就散</title>
@@ -25,6 +25,7 @@
       <p class="tagline">先写下来，再亲手毁掉——这是主线。语音与小游戏是旁路。</p>
       <nav class="hero-jump" aria-label="快捷跳转">
         <a href="#ritual">去写下</a>
+        <a href="#companion">树洞</a>
         <a href="#emotionPool">语音泄</a>
         <a href="#calmKit">静一静</a>
       </nav>
@@ -97,6 +98,43 @@
         <button type="button" class="neon-btn magenta" id="btnPostBreathe">呼吸缓一缓</button>
         <button type="button" class="ghost-btn" id="btnPostSkip">跳过</button>
       </div>
+    </section>
+
+
+    <!-- 树洞伙伴：离线模板倾听 + 可选 WebLLM -->
+    <section class="panel companion" id="companion" aria-label="树洞伙伴">
+      <div class="panel-sign">
+        <span class="sign-glow cyan">树洞伙伴</span>
+        <span class="sign-badge soft">倾听者</span>
+      </div>
+      <p class="pool-lead">一位倾听者，<strong>不是心理医生</strong>。默认完全离线的模板共情；可选在本机用 WebGPU 跑小模型（无 API Key）。对话不上传。</p>
+      <p class="companion-disclaimer" role="note">本功能仅供情绪疏导练习，不能替代专业心理咨询或医疗建议。若有自伤/自杀念头，请立即联系热线或身边可信的人。</p>
+
+      <div class="companion-modes" role="group" aria-label="倾听方式">
+        <button type="button" class="chip is-on" id="btnModeRule" aria-pressed="true">模板倾听</button>
+        <button type="button" class="chip" id="btnModeWebllm" aria-pressed="false">本地小模型</button>
+        <button type="button" class="ghost-btn companion-clear" id="btnCompanionClear">清空对话</button>
+      </div>
+      <p class="companion-llm-progress" id="companionLlmProgress" hidden></p>
+
+      <div class="companion-starters" id="companionStarters" aria-label="开场提示">
+        <button type="button" class="prompt-chip" data-starter="今天憋了一整天，特别想骂人。">想骂人</button>
+        <button type="button" class="prompt-chip" data-starter="我好累，感觉快撑不住了。">好累</button>
+        <button type="button" class="prompt-chip" data-starter="心里很慌，一直在担心明天。">很慌</button>
+        <button type="button" class="prompt-chip" data-starter="感觉没人懂我，好孤独。">孤独</button>
+        <button type="button" class="prompt-chip" data-starter="和家里又吵了一架，特别委屈。">委屈</button>
+      </div>
+
+      <div class="companion-log" id="companionLog" role="log" aria-live="polite" aria-relevant="additions"></div>
+
+      <div class="companion-compose">
+        <label for="companionInput" class="sr-only">对树洞伙伴说</label>
+        <textarea id="companionInput" rows="2" maxlength="800" placeholder="想倒的情绪写这儿……Enter 发送，Shift+Enter 换行"></textarea>
+        <button type="button" class="neon-btn cyan" id="btnCompanionSend" disabled>发送</button>
+      </div>
+      <p class="companion-status" id="companionStatus" role="status"></p>
+      <p class="privacy-note" role="note">默认模板回复纯本地；若启用本地小模型，权重从 CDN 下载到本机缓存，推理仍在浏览器内。无账号、无服务器密钥。</p>
+      <p class="companion-hotlines">危机支持：<a href="tel:4001619995">400-161-9995</a>（希望24）· <a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线</a></p>
     </section>
 
     <!-- Mood journal + trend -->
@@ -304,5 +342,6 @@
   <script src="js/games.js"></script>
   <script src="js/extras.js"></script>
   <script src="js/pool.js"></script>
+  <script src="js/companion.js"></script>
 </body>
 </html>
