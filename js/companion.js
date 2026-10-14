@@ -27,105 +27,33 @@
     "不要说教，不要列长清单。若用户流露自伤或自杀意念，温和提醒寻求真人专业支持，并提及热线 400-161-9995。" +
     "永远不要自称心理医生、咨询师或治疗师。";
 
-  /* —— Emotion buckets → template replies —— */
+  /* —— Emotion buckets (tone only; NEVER used as full replies) —— */
   const BUCKETS = [
-    {
-      id: "anger",
-      re: /怒|气炸|生气|愤怒|烦死|受够|忍无可忍|火大|窝火|憋屈|恨|想砸|想骂/,
-      replies: [
-        "听得出来，这股火很大，堵在胸口很久了。你愿意多说一点，是什么把你推到这一步的吗？",
-        "被气到、觉得不公平，是很真实的感受。我在这儿听着。此刻最想对对方说、却没说出口的一句是什么？",
-        "怒气常常在保护你不被继续伤害。先不用逼自己冷静——你愿意把最堵的那一句倒出来吗？",
-      ],
-    },
-    {
-      id: "fatigue",
-      re: /累|疲惫|撑不住|没力气|崩溃|透支|倦|睡不好|失眠|心力交瘁/,
-      replies: [
-        "听起来你已经撑了很久，身体和心都在喊停。最近是哪一块最耗你？",
-        "累到说不出话也很常见。不用一次讲完——你现在最需要的，是休息、被听见，还是有人陪着不说话？",
-        "疲惫有时是长期紧绷的信号。你愿意描述一下「累」具体落在哪里吗——脑子、胸口，还是整个人？",
-      ],
-    },
-    {
-      id: "anxiety",
-      re: /焦虑|紧张|害怕|慌|担心|不安|心悸|坐立不安|恐惧|怕/,
-      replies: [
-        "焦虑让人一直悬着，很消耗。你现在最担心会发生的那件事，能说说吗？",
-        "害怕被看见时，身体也会跟着紧。我在听。若只选一件，「此刻最揪心的」是哪件？",
-        "不安常常指向「失控感」。你愿意把脑海里转得最快的那个念头写下来吗？写出来有时会轻一点。",
-      ],
-    },
-    {
-      id: "sad",
-      re: /难过|伤心|委屈|哭|失落|心酸|心痛|难受|郁闷|低落|绝望/,
-      replies: [
-        "听起来心里很沉，委屈和难受都值得被看见。发生了什么，让你这么难受？",
-        "难过的时候，不必马上振作。我陪你待一会儿。你希望被怎样对待——听、抱抱，还是静静坐着？",
-        "眼泪和沉默都是在说话。若你愿意，把最酸的那一句交给我也好。",
-      ],
-    },
-    {
-      id: "lonely",
-      re: /孤独|寂寞|没人懂|一个人|被忽视|没人听|没人在意|孤单/,
-      replies: [
-        "感到孤单、觉得没人懂，是很沉的体验。此刻有我在听。你最希望有人懂的是哪一部分？",
-        "一个人扛着的时候，世界会显得特别大。你愿意说说，今天是什么让孤独感突然变重了？",
-        "被忽视的感觉很伤。你不需要把一切讲完美——随便从哪一句开始都行。",
-      ],
-    },
-    {
-      id: "shame",
-      re: /羞耻|丢脸|没用|废物|失败|讨厌自己|自我厌恶|愧疚|内疚|对不起自己/,
-      replies: [
-        "对自己苛刻的时候，世界会变得很小。你不是「废物」——你是一个正在难受的人。愿意说说是什么触发了这句自我攻击吗？",
-        "羞耻感常让人想躲起来。我不会评判你。若只说一件「我其实也……」，你会选哪件？",
-        "失败感和讨厌自己，常常叠在疲惫上面。你愿意把对自己说的那句最狠的话，换成一句你会对朋友说的话吗？",
-      ],
-    },
-    {
-      id: "work",
-      re: /工作|上班|老板|同事|加班|裁员|KPI|压力大|职场/,
-      replies: [
-        "职场的压榨感很容易把人掏空。今天最让你喘不过气的，是人、事，还是那种「永远做不完」的感觉？",
-        "工作压力不只是「忙」，常常还有不被看见。你最想被同事或领导听到的一句是什么？",
-        "听起来工作把你挤得很扁。先把情绪放这儿——你更想吐槽具体的事，还是那种整体的无力感？",
-      ],
-    },
-    {
-      id: "family",
-      re: /家人|父母|爸爸|妈妈|亲戚|家里|原生家庭|催婚|比较/,
-      replies: [
-        "和家人的纠缠常常又爱又累。你愿意说说，最近哪一句或哪件事最刺你？",
-        "原生家庭的旧伤，有时会在小事上突然炸开。我在听。你现在最需要的是边界，还是被理解？",
-        "家里的期待可以很重。把「他们要的」和「你要的」分开说，也许会清晰一点——你更想从哪边开始？",
-      ],
-    },
-    {
-      id: "relation",
-      re: /分手|恋爱|伴侣|对象|吵架|冷暴力|嫌弃|背叛|朋友|关系/,
-      replies: [
-        "关系里的伤口特别磨人。你现在的感受更靠近委屈、愤怒，还是失落？",
-        "被冷落或争吵之后，脑子会反复回放。愿意把最卡的那一幕讲给我听吗？",
-        "亲密关系里的痛，不需要马上「想开」。我先陪你待着。你最想被对方看见的是什么？",
-      ],
-    },
+    { id: "anger", re: /怒|气炸|生气|愤怒|烦死|受够|忍无可忍|火大|窝火|憋屈|恨|想砸|想骂/ },
+    { id: "fatigue", re: /累|疲惫|撑不住|没力气|崩溃|透支|倦|睡不好|失眠|心力交瘁/ },
+    { id: "anxiety", re: /焦虑|紧张|害怕|慌|担心|不安|心悸|坐立不安|恐惧|怕/ },
+    { id: "sad", re: /难过|伤心|委屈|哭|失落|心酸|心痛|难受|郁闷|低落|绝望/ },
+    { id: "lonely", re: /孤独|寂寞|没人懂|一个人|被忽视|没人听|没人在意|孤单/ },
+    { id: "shame", re: /羞耻|丢脸|没用|废物|失败|讨厌自己|自我厌恶|愧疚|内疚|对不起自己/ },
+    { id: "work", re: /工作|上班|老板|同事|加班|裁员|KPI|压力大|职场/ },
+    { id: "family", re: /家人|父母|爸爸|妈妈|亲戚|家里|原生家庭|催婚|比较/ },
+    { id: "relation", re: /分手|恋爱|伴侣|对象|吵架|冷暴力|嫌弃|背叛|朋友|关系/ },
   ];
 
-  const GENERIC = [
-    "我在听。你刚才说的这些，哪一句是你最想被接住的？",
-    "谢谢你愿意写下来。继续说也行，停一停也行——你现在更想怎样？",
-    "听起来心里有事堵着。不用组织得很完美，想到什么就说什么。",
-    "我接住了。若用一个词形容此刻的心情，你会选哪个？",
-    "你已经迈出了开口这一步。还有哪一块，是你一直没对别人说过的？",
-  ];
+  /** Short empathy beats only — never a complete standalone reply */
+  const TONE = {
+    anger: ["这股火不是无来由的。", "被气到、觉得不公平，是很真实的感受。", "怒气常常在保护你不被继续伤害。"],
+    fatigue: ["听起来你已经撑了很久。", "累到说不出话也很常见。", "疲惫有时是长期紧绷的信号。"],
+    anxiety: ["焦虑让人一直悬着，很消耗。", "害怕被看见时，身体也会跟着紧。", "不安常常指向失控感。"],
+    sad: ["心里很沉的时候，委屈也值得被看见。", "难过的时候，不必马上振作。", "眼泪和沉默都是在说话。"],
+    lonely: ["感到孤单、觉得没人懂，是很沉的体验。", "一个人扛着的时候，世界会显得特别大。"],
+    shame: ["对自己苛刻的时候，世界会变得很小。", "羞耻感常让人想躲起来——我不会评判你。"],
+    work: ["职场的压榨感很容易把人掏空。", "工作压力不只是忙，常常还有不被看见。"],
+    family: ["和家人的纠缠常常又爱又累。", "家里的期待可以很重。"],
+    relation: ["关系里的伤口特别磨人。", "被冷落或争吵之后，脑子会反复回放。"],
+    generic: ["听起来心里有事堵着。", "谢谢你愿意写下来。", "我接住了。"],
+  };
 
-  const FOLLOWUPS = [
-    "嗯，我听见了。还有呢？",
-    "这一块听起来特别重。要不要再展开一点？",
-    "你愿意的话，可以说说身体现在什么感觉——紧、空，还是麻木？",
-    "如果可以对自己温柔一句，你会说什么？",
-  ];
 
   const GREETING =
     "你好，我是树洞伙伴——一位倾听者，不是心理医生。\n" +
@@ -315,9 +243,7 @@
   function reflectClause(keys) {
     if (!keys || !keys.length) return "";
     const show = keys.slice(0, 2);
-    if (show.length === 1) {
-      return "你提到了「" + show[0] + "」";
-    }
+    if (show.length === 1) return "你提到了「" + show[0] + "」";
     return "你提到了「" + show[0] + "」和「" + show[1] + "」";
   }
 
@@ -343,13 +269,47 @@
     return reply;
   }
 
+  function joinParts(parts) {
+    return parts
+      .filter(Boolean)
+      .map((p) => {
+        let s = String(p).trim();
+        if (!s) return "";
+        // Ensure sentence end so parts don't glue into one run-on
+        if (!/[。！？…]$/.test(s)) s += "。";
+        return s;
+      })
+      .join("");
+  }
+
+  /** Hard requirement: reply must START with reflection of keys[0..1] when keys exist. */
+  function forceReflectStart(reply, keys) {
+    if (!keys || !keys.length) return reply;
+    const head = reflectClause(keys);
+    const must = keys.slice(0, 2);
+    const startsOk =
+      reply.startsWith(head) ||
+      reply.startsWith("你提到了「" + must[0] + "」") ||
+      (must[1] &&
+        (reply.startsWith("「" + must[0] + "」和「" + must[1] + "」") ||
+          reply.startsWith("关于「" + must[0] + "」和「" + must[1] + "」")));
+    const hasAll = must.every((k) => reply.includes(k));
+    if (startsOk && hasAll) return reply;
+    // Strip a broken leading reflect, then prepend canonical head
+    let rest = reply.replace(
+      /^(你提到了「[^」]+」(和「[^」]+」)?[。.——，]*|关于「[^」]+」(和「[^」]+」)?[，。]*|「[^」]+」和「[^」]+」[^\u4e00-\u9fff]{0,8})/,
+      ""
+    );
+    rest = rest.trim();
+    if (!rest) rest = "我接住了。你愿意多说一点吗？";
+    return joinParts([head + "。", rest]);
+  }
+
   function buildReflective(text, keys, bucket) {
-    const reflect = reflectClause(keys);
-    const theme = sessionTheme;
     const key0 = keys[0] || "";
     const key1 = keys[1] || "";
+    const theme = sessionTheme;
 
-    // Progressive: after several turns on same theme, deepen
     const deepen =
       theme &&
       bucket &&
@@ -357,94 +317,40 @@
       turnCount >= 2 &&
       Math.random() < 0.55;
 
-    const openers = [];
-    if (reflect) {
-      openers.push(
-        reflect + "——听起来这件事在你心里占了很大一块。",
-        reflect + "。我接住了。",
-        reflect + "，这话里压着不少力气。",
-        "关于「" + key0 + "」，我听见了。"
-      );
-      if (key1) {
-        openers.push(
-          "「" + key0 + "」和「" + key1 + "」叠在一起，确实容易把人压扁。"
-        );
-      }
+    // Opener ALWAYS reflects keys when present (variants all contain key0 and key1)
+    let opener = "我在听。";
+    if (keys.length >= 2) {
+      opener = pickUnique([
+        "你提到了「" + key0 + "」和「" + key1 + "」。",
+        "关于「" + key0 + "」和「" + key1 + "」，我听见了。",
+        "「" + key0 + "」和「" + key1 + "」叠在一起，确实容易把人压扁。",
+        "你提到了「" + key0 + "」和「" + key1 + "」——这话里压着不少力气。",
+      ]);
+    } else if (keys.length === 1) {
+      opener = pickUnique([
+        "你提到了「" + key0 + "」。",
+        "关于「" + key0 + "」，我听见了。",
+        "你提到了「" + key0 + "」——听起来这件事在你心里占了很大一块。",
+      ]);
     }
 
-    const middles = [];
-    if (bucket) {
-      if (bucket.id === "anger") {
-        middles.push(
-          "这股火不是无来由的。",
-          "被气到、觉得不公平，是很真实的感受。",
-          "怒气常常在保护你不被继续伤害。"
-        );
-      } else if (bucket.id === "fatigue") {
-        middles.push(
-          "听起来你已经撑了很久。",
-          "累到说不出话也很常见。",
-          "疲惫有时是长期紧绷的信号。"
-        );
-      } else if (bucket.id === "anxiety") {
-        middles.push(
-          "焦虑让人一直悬着，很消耗。",
-          "害怕被看见时，身体也会跟着紧。",
-          "不安常常指向失控感。"
-        );
-      } else if (bucket.id === "sad") {
-        middles.push(
-          "心里很沉的时候，委屈也值得被看见。",
-          "难过的时候，不必马上振作。",
-          "眼泪和沉默都是在说话。"
-        );
-      } else if (bucket.id === "lonely") {
-        middles.push(
-          "感到孤单、觉得没人懂，是很沉的体验。",
-          "一个人扛着的时候，世界会显得特别大。"
-        );
-      } else if (bucket.id === "shame") {
-        middles.push(
-          "对自己苛刻的时候，世界会变得很小。",
-          "羞耻感常让人想躲起来——我不会评判你。"
-        );
-      } else if (bucket.id === "work") {
-        middles.push(
-          "职场的压榨感很容易把人掏空。",
-          "工作压力不只是忙，常常还有不被看见。"
-        );
-      } else if (bucket.id === "family") {
-        middles.push(
-          "和家人的纠缠常常又爱又累。",
-          "家里的期待可以很重。"
-        );
-      } else if (bucket.id === "relation") {
-        middles.push(
-          "关系里的伤口特别磨人。",
-          "被冷落或争吵之后，脑子会反复回放。"
-        );
-      }
-    } else {
-      middles.push(
-        "听起来心里有事堵着。",
-        "谢谢你愿意写下来。",
-        "我在听。"
-      );
-    }
+    const toneList =
+      (bucket && TONE[bucket.id]) || TONE.generic;
+    const mid = pickUnique(toneList);
 
     const questions = [];
-    if (key0) {
+    if (key0 && key1) {
+      questions.push(
+        "关于「" + key0 + "」和「" + key1 + "」，哪一块更想先倒出来？",
+        "「" + key0 + "」这件事，和「" + key1 + "」叠在一起时，你最堵的一句是什么？",
+        "若只盯着「" + key0 + "」，此刻身体哪里最紧——胸口、太阳穴，还是胃？"
+      );
+    } else if (key0) {
       questions.push(
         "关于「" + key0 + "」，此刻最堵的那一句是什么？",
         "「" + key0 + "」这件事，你最想对谁说一句却还没说出口？",
-        "若只盯着「" + key0 + "」，你现在身体哪里最紧——胸口、太阳穴，还是胃？",
         "「" + key0 + "」让你最难受的，是不公平，还是无力感？"
       );
-      if (key1) {
-        questions.push(
-          "「" + key0 + "」和「" + key1 + "」里，哪一块更想先倒出来？"
-        );
-      }
     }
     if (deepen && knownKeys.length) {
       const earlier = knownKeys.filter((k) => !keys.includes(k)).slice(-2);
@@ -454,42 +360,24 @@
             earlier[0] +
             "」。它和现在说的「" +
             (key0 || "这件事") +
-            "」是连在一起的吗？",
-          "我们绕回「" +
-            earlier[0] +
-            "」看一眼——今天又触到它了吗？"
+            "」是连在一起的吗？"
         );
       }
       questions.push(
-        "同一主题又回来了。若用一个动作形容这股感觉，你会选砸、撕，还是把气吐掉？",
-        "已经说了几轮。你更想继续挖深一点，还是换个角度——比如身体现在什么感觉？"
+        "同一主题又回来了。你更想继续挖深一点，还是说说身体现在什么感觉？"
       );
     }
-    questions.push(
-      "你愿意多说一点吗？",
-      "此刻最想被接住的是哪一句？",
-      "继续说也行，停一停也行——你现在更想怎样？"
-    );
-
-    const o = pickUnique(openers.length ? openers : ["我在听。"]);
-    const mid = pickUnique(middles.length ? middles : ["我接住了。"]);
+    if (!questions.length) {
+      questions.push(
+        "你愿意多说一点吗？",
+        "此刻最想被接住的是哪一句？",
+        "继续说也行，停一停也行——你现在更想怎样？"
+      );
+    }
     const q = pickUnique(questions);
 
-    // Always ensure at least one key appears in the final reply when available
-    let reply = o + mid + q;
-    if (keys.length) {
-      const hasKey = keys.some((k) => reply.includes(k) || reply.includes("「" + k + "」"));
-      if (!hasKey) {
-        reply =
-          "你说到「" +
-          keys[0] +
-          "」。" +
-          mid +
-          (key0
-            ? "关于「" + key0 + "」，你还想补充哪一句？"
-            : q);
-      }
-    }
+    let reply = joinParts([opener, mid, q]);
+    reply = forceReflectStart(reply, keys);
     return reply;
   }
 
@@ -514,8 +402,28 @@
       );
     }
 
-    // Short text with keys still get reflection
-    const reply = buildReflective(t, keys, bucket);
+    let reply = buildReflective(t, keys, bucket);
+    // Final hard gate: keys present ⇒ reflection + every top key appears
+    if (keys.length) {
+      reply = forceReflectStart(reply, keys);
+      const must = keys.slice(0, 2);
+      const missing = must.filter((k) => !reply.includes(k));
+      if (missing.length) {
+        reply = joinParts([
+          reflectClause(must) + "。",
+          "我接住了。",
+          missing.length
+            ? "关于「" + must.join("」和「") + "」，你还想补充哪一句？"
+            : "你愿意多说一点吗？",
+        ]);
+      }
+      if (!reply.includes(must[0])) {
+        // Absolute last resort — must never ship a keyless reply when keys exist
+        reply =
+          reflectClause(must) +
+          "。我接住了。关于这些，你愿意多说一点吗？";
+      }
+    }
     return commitReply(reply);
   }
 

@@ -82,15 +82,45 @@ const cases = [
   },
 ];
 
+// --- CRITICAL: exact live-fail sentence must include 老板 AND 加班 ---
+const LIVE_FAIL = "老板天天骂我，加班到半夜，气炸了";
+VC.resetSession();
+{
+  const reply = VC.ruleReply(LIVE_FAIL);
+  assert(reply.includes("老板"), `LIVE_FAIL must include 老板\n  → ${reply}`);
+  assert(reply.includes("加班"), `LIVE_FAIL must include 加班\n  → ${reply}`);
+  assert(
+    /^(你提到了「|关于「|「)/.test(reply),
+    `LIVE_FAIL must START with key reflection\n  → ${reply}`
+  );
+  assert(
+    !reply.includes("我在这儿听着。此刻最想对对方说"),
+    `must not use old full bucket template\n  → ${reply}`
+  );
+  console.log("SAMPLE:", reply);
+}
+
 VC.resetSession();
 for (const c of cases) {
   VC.resetSession();
   const reply = VC.ruleReply(c.msg);
   const hit = c.mustAny.some((k) => reply.includes(k));
   assert(hit, `reflect 「${c.mustAny.join("/")}」 in reply to: ${c.msg}\n  → ${reply}`);
+  assert(
+    /^(你提到了「|关于「|「)/.test(reply) || c.mustAny.every((k) => !reply.includes(k)),
+    `reply should start with reflection when keys present\n  → ${reply}`
+  );
   const keys = VC.extractKeywords(c.msg);
   assert(keys.length > 0, `extractKeywords non-empty for: ${c.msg} → ${JSON.stringify(keys)}`);
 }
+
+// Source must not contain old complete bucket reply strings
+const src = fs.readFileSync(path.join(__dirname, "../js/companion.js"), "utf8");
+assert(!/replies:\s*\[/.test(src), "companion.js must not have BUCKETS.replies arrays");
+assert(
+  !src.includes("我在这儿听着。此刻最想对对方说、却没说出口的一句是什么？"),
+  "old anger full-template string must be deleted"
+);
 
 // --- 8 similar anger turns: high uniqueness + still content-aware ---
 VC.resetSession();

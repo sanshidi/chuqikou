@@ -1,5 +1,5 @@
 /* 出气口 — offline cache, local-only app shell */
-const CACHE = 'chuqikou-v4';
+const CACHE = 'chuqikou-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -32,6 +32,24 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  // JS/CSS/HTML: network-first so Pages deploys are not stuck on old SW cache
+  const netFirst = /\.(js|css|html|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/');
+  if (netFirst) {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(req).then((cached) => {
       const fetched = fetch(req)

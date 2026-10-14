@@ -68,6 +68,15 @@ https://sanshidi.github.io/chuqikou/
 
 ## 树洞伙伴（无 API Key）
 
+## 若树洞回复仍是旧模板
+
+本站用 Service Worker 缓存。若回复仍像「被气到、觉得不公平…我在这儿听着…」这类**不提你原话**的旧句，请硬刷新，或在浏览器里注销本站 SW 后再打开：
+
+1. Chrome/Edge：地址栏旁锁图标 → 网站设置 → 清除数据；或 DevTools → Application → Service Workers → Unregister  
+2. 再打开 https://sanshidi.github.io/chuqikou/ （缓存名已升至 `chuqikou-v5`，JS 改为 network-first）
+
+
+
 模板模式会从你的句子里抽出具体词（如「老板」「催婚」）写进回复，避免千篇一律的空共情；同会话主题会递进追问，并避免最近几句原样重复。
 
 | 路径 | 说明 |
