@@ -64,6 +64,10 @@ https://sanshidi.github.io/chuqikou/
 
 公共动态、聊天、AI、账号、上传用户内容、具象打人。
 
+## 移动端
+
+为减少误触放大，页面 `viewport` 设为 `maximum-scale=1, user-scalable=no`；需要系统级放大可改用系统辅助功能。按住说话区域使用 `touch-action: none`，不受影响。
+
 ## 文件
 
 - `index.html` — 结构与文案  
