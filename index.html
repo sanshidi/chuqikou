@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="出气口 — 雨夜巷口的情绪释放站。写完即毁，本地小游戏减压，内容从不上传。" />
+  <meta name="description" content="出气口 — 雨夜巷口的情绪释放站。写完即毁，情绪池语音泡泡，本地小游戏减压，内容从不上传。" />
   <meta name="theme-color" content="#0c0a12" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230c0a12'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16'%3E%E5%87%BA%3C/text%3E%3C/svg%3E" />
   <title>出气口 · 雨夜巷口·写完就散</title>
@@ -65,6 +65,49 @@
     </section>
 
     <div class="balloon-layer" id="balloonLayer" aria-hidden="true"></div>
+
+    <!-- Emotion pool -->
+    <section class="panel emotion-pool" id="emotionPool" aria-label="情绪池">
+      <div class="panel-sign">
+        <span class="sign-glow">情绪池</span>
+      </div>
+      <p class="pool-lead">对着麦克风倒一倒。泡泡在池里会慢慢长大、往上飘。点泡泡可以听（再点暂停）；点泡泡上的「炸」或等引信到点才会炸掉。录音只在本机，从不上传；刷新即清空。</p>
+
+      <div class="pool-controls">
+        <div class="pool-row">
+          <span class="pool-label">引信</span>
+          <div class="chip-group" role="group" aria-label="爆炸倒计时">
+            <button type="button" class="chip" data-fuse="10">10 秒</button>
+            <button type="button" class="chip" data-fuse="20">20 秒</button>
+            <button type="button" class="chip is-on" data-fuse="day" aria-pressed="true">今天结束</button>
+          </div>
+        </div>
+        <div class="pool-row">
+          <span class="pool-label">变声</span>
+          <div class="chip-group" role="group" aria-label="播放变声">
+            <button type="button" class="chip is-on" data-voice="normal" aria-pressed="true">原声</button>
+            <button type="button" class="chip" data-voice="low">低沉</button>
+            <button type="button" class="chip" data-voice="high">尖细</button>
+            <button type="button" class="chip" data-voice="echo">回声</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pool-record-bar">
+        <button type="button" class="neon-btn magenta pool-rec-btn" id="btnPoolRec" aria-pressed="false">点一下开始录音</button>
+        <button type="button" class="neon-btn cyan" id="btnPoolPreview" disabled>试听</button>
+        <button type="button" class="neon-btn violet" id="btnPoolDrop" disabled>丢进池里</button>
+      </div>
+      <p class="pool-status" id="poolStatus" role="status">还没录音。需要麦克风权限；拒绝也能看着空池发呆。</p>
+      <p class="privacy-note" role="note">语音气泡仅保存在本页内存，关闭或刷新即消失；不会上传服务器。</p>
+
+      <div class="pool-tank" id="poolTank" aria-label="情绪泡泡池">
+        <canvas class="pool-fx" id="poolFx" aria-hidden="true"></canvas>
+        <div class="pool-bubbles" id="poolBubbles"></div>
+        <p class="pool-empty" id="poolEmpty">池子还空着 · 录一段丢进来</p>
+      </div>
+      <p class="pool-hint">越接近爆炸越大、越往上飘。点泡泡听/暂停 · 点「炸」炸掉 · 引信到点自动炸。</p>
+    </section>
 
     <!-- Game arcade hub -->
     <section class="arcade" aria-label="出气小游戏">
@@ -188,5 +231,6 @@
 
   <script src="js/app.js"></script>
   <script src="js/games.js"></script>
+  <script src="js/pool.js"></script>
 </body>
 </html>
