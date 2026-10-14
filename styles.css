@@ -25,8 +25,10 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   scroll-behavior: smooth;
   touch-action: manipulation;
+  -ms-touch-action: manipulation;
 }
 
 textarea,

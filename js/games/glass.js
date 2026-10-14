@@ -212,13 +212,13 @@
     "pointerdown",
     (e) => {
       e.preventDefault();
-      V.ensureAudio();
+      if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
       smash(e.clientX, e.clientY);
     },
     { passive: false }
   );
   clearBtn.addEventListener("click", () => {
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     clearGlass();
   });
   window.addEventListener("resize", resize);

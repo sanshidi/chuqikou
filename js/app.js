@@ -55,15 +55,22 @@
   } catch (_) {}
 
 
-  /* —— Harden against mobile pinch-zoom (Safari gestures + multi-touch) —— */
+  /* —— Harden against mobile pinch-zoom (Safari / WeChat / Chrome) —— */
   (function blockPinchZoom() {
     const opt = { passive: false, capture: true };
     function prevent(e) {
-      e.preventDefault();
+      try { e.preventDefault(); } catch (_) {}
     }
     ["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
       document.addEventListener(type, prevent, opt);
     });
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches && e.touches.length > 1) prevent(e);
+      },
+      opt
+    );
     document.addEventListener(
       "touchmove",
       (e) => {
@@ -71,7 +78,6 @@
       },
       opt
     );
-    // iOS sometimes fires ctrl+wheel zoom on trackpads; harmless on phones
     document.addEventListener(
       "wheel",
       (e) => {
@@ -79,6 +85,34 @@
       },
       opt
     );
+    let lastTouchEnd = 0;
+    document.addEventListener(
+      "touchend",
+      (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd < 320) {
+          const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+          if (tag !== "input" && tag !== "textarea" && tag !== "select") prevent(e);
+        }
+        lastTouchEnd = now;
+      },
+      opt
+    );
+    function lockViewportMeta() {
+      try {
+        let meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+          meta = document.createElement("meta");
+          meta.setAttribute("name", "viewport");
+          (document.head || document.documentElement).appendChild(meta);
+        }
+        meta.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        );
+      } catch (_) {}
+    }
+    lockViewportMeta();
   })();
 
   /* —— Shared API for games —— */

@@ -1,0 +1,20 @@
+{
+  "name": "vent-mvp",
+  "version": "1.0.0",
+  "description": "深夜巷口的压力释放阀 —— 本地情绪发泄小站。写完就散、玩几局出气小游戏，然后缓一缓。**内容只留在本机，不上传、无账号。**",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanshidi/chuqikou.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sanshidi/chuqikou/issues"
+  },
+  "homepage": "https://github.com/sanshidi/chuqikou#readme"
+}

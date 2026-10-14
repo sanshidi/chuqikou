@@ -130,7 +130,8 @@
     "pointerdown",
     (e) => {
       e.preventDefault();
-      V.ensureAudio();
+      if (V.unlockAudio) V.unlockAudio(false);
+      else V.ensureAudio();
       lastPtr = { x: e.clientX, y: e.clientY, t: performance.now() };
       try {
         arena.setPointerCapture(e.pointerId);

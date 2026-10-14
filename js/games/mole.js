@@ -85,7 +85,7 @@
   function smack(slot, e) {
     if (!slot.up) return;
     e.preventDefault();
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     const r = slot.target.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
     const lx = r.left + r.width / 2 - sr.left;

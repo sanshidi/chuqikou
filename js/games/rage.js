@@ -149,7 +149,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "Escape" || e.key === "Tab") return;
     e.preventDefault();
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     if (meter >= 100) { release(); return; }
     const label = e.key.length === 1 ? e.key.toUpperCase() : WORDS[(Math.random() * WORDS.length) | 0];
     addRage(3.2, label);
@@ -157,7 +157,7 @@
 
   function onPointer(e) {
     e.preventDefault();
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     if (meter >= 100) { release(); return; }
     addRage(4.2, null, e.clientX, e.clientY);
   }

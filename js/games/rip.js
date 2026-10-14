@@ -140,7 +140,7 @@
     "pointerdown",
     (e) => {
       e.preventDefault();
-      V.ensureAudio();
+      if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
       dragging = true;
       start = { x: e.clientX, y: e.clientY };
       ripProgress = 0;

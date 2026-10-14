@@ -129,7 +129,7 @@
     "pointerdown",
     (e) => {
       e.preventDefault();
-      V.ensureAudio();
+      if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
       dragging = true;
       lastStreak = { x: e.clientX, y: e.clientY };
       try {
@@ -158,7 +158,7 @@
   grid.addEventListener("pointercancel", endDrag);
 
   popAllBtn.addEventListener("click", () => {
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     const cells = Array.from(grid.querySelectorAll(".bubble-cell:not(.popped)"));
     cells.forEach((b, i) => {
       setTimeout(() => {

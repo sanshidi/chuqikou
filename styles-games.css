@@ -12,8 +12,12 @@ html, body {
   color: var(--paper, #f4e8d8);
   font-family: var(--font-body, "Noto Sans SC", system-ui, sans-serif);
   touch-action: manipulation;
+  -ms-touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .game-page {
@@ -82,6 +86,31 @@ html, body {
   margin: 0.15rem 0 0;
   font-size: 0.72rem;
   color: var(--muted, #9a8fb0);
+}
+
+
+.game-audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.test-sfx-btn {
+  appearance: none;
+  border: 1px solid rgba(92, 225, 230, 0.55);
+  background: rgba(12, 10, 18, 0.85);
+  color: var(--cyan, #5ce1e6);
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  white-space: nowrap;
+  clip-path: polygon(0 5px, 5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+}
+.test-sfx-btn:active {
+  transform: scale(0.96);
+  background: rgba(92, 225, 230, 0.18);
 }
 
 .mute-btn {
@@ -993,28 +1022,41 @@ html.is-hitstop .game-stage-full * {
   filter: brightness(1.15);
 }
 
-/* Tap-to-enable audio (mobile / WeChat) */
+/* Tap-to-enable audio (mobile / WeChat) — must be unmissable */
 .audio-unlock-banner {
   position: fixed;
   left: 50%;
-  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: 40;
+  top: 42%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  z-index: 80;
   appearance: none;
-  border: 1px solid rgba(92, 225, 230, 0.55);
-  background: rgba(12, 10, 18, 0.92);
+  border: 2px solid rgba(255, 61, 127, 0.85);
+  background: rgba(12, 10, 18, 0.96);
   color: var(--paper, #f4e8d8);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
+  font-weight: 700;
   letter-spacing: 0.06em;
-  padding: 0.65rem 1.1rem;
-  border-radius: 999px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 18px rgba(92, 225, 230, 0.2);
+  line-height: 1.35;
+  padding: 1rem 1.4rem;
+  border-radius: 18px;
+  min-width: min(86vw, 20rem);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 28px rgba(255, 61, 127, 0.35);
   cursor: pointer;
-  animation: unlock-pulse 1.6s ease-in-out infinite;
+  animation: unlock-pulse 1.4s ease-in-out infinite;
+  text-align: center;
+}
+.audio-unlock-banner small {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--cyan, #5ce1e6);
+  letter-spacing: 0.04em;
 }
 .audio-unlock-banner:active {
-  transform: translateX(-50%) scale(0.98);
+  transform: translate(-50%, -50%) scale(0.97);
 }
 @keyframes unlock-pulse {
   0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 12px rgba(92, 225, 230, 0.15); }

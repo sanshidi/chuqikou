@@ -101,7 +101,7 @@
 
   function hit(e) {
     if (e) e.preventDefault();
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     const now = performance.now();
     if (lastHit && now - lastHit < 120) return;
     if (lastHit) updateRhythm(now - lastHit);

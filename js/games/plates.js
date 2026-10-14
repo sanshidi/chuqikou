@@ -231,7 +231,7 @@
 
   function onPointer(e) {
     e.preventDefault();
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX || 0) - rect.left;
     const y = (e.clientY || 0) - rect.top;

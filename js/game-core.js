@@ -1,6 +1,11 @@
 /**
  * 出气口 — shared game core (audio, stats, juice helpers)
  * Local-only. No uploads.
+ *
+ * Audio policy (iOS / WeChat / Chrome):
+ * - Never schedule Web Audio while AudioContext is suspended (stale currentTime → silence).
+ * - resume() then schedule with FRESH currentTime; also HTMLAudioElement fallback in-gesture.
+ * - Mute defaults OFF; chuqikou-mute only when user sets "1".
  */
 (function () {
   "use strict";
@@ -10,12 +15,16 @@
   let masterAnalyser = null;
   let muted = false;
   let reducedMotion = false;
+  let audioReady = false;
+  let unlockBannerEl = null;
+  let resumeChain = null;
 
   try {
     reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch (_) {}
 
   const STATS_KEY = "chuqikou-game-stats-v1";
+  const MUTE_KEY = "chuqikou-mute";
 
   function loadStats() {
     try {
@@ -77,14 +86,27 @@
     return g;
   }
 
+  function setAudioState(state) {
+    try {
+      if (document.body) document.body.setAttribute("data-audio-state", state);
+    } catch (_) {}
+  }
+
   function ensureAudio() {
     if (!audioCtx) {
       const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) audioCtx = new AC();
+      if (AC) {
+        try {
+          audioCtx = new AC();
+        } catch (_) {
+          audioCtx = null;
+        }
+      }
     }
     if (audioCtx && audioCtx.state === "suspended") {
       try {
-        audioCtx.resume();
+        const p = audioCtx.resume();
+        if (p && typeof p.then === "function") resumeChain = p.catch(() => audioCtx);
       } catch (_) {}
     }
     return audioCtx;
@@ -143,13 +165,180 @@
     return peak / 128;
   }
 
+  function audioFreqPeak() {
+    if (!masterAnalyser) return 0;
+    const data = new Uint8Array(masterAnalyser.frequencyBinCount);
+    masterAnalyser.getByteFrequencyData(data);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, data[i]);
+    return peak;
+  }
+
+  /* —— HTMLAudioElement fallback (WeChat / X5 when Web Audio flaky) —— */
+  const htmlUriCache = Object.create(null);
+  const htmlPool = Object.create(null);
+
+  function makeWavDataUri(freq, duration, vol, opts) {
+    const o = opts || {};
+    const sampleRate = 22050;
+    const numSamples = Math.max(1, Math.floor(sampleRate * duration));
+    const dataSize = numSamples * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    function writeStr(off, str) {
+      for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+    }
+    writeStr(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, "data");
+    view.setUint32(40, dataSize, true);
+    const decay = o.decay == null ? 10 : o.decay;
+    const freq2 = o.freq2 || 0;
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const env = Math.exp(-t * decay);
+      let sample = Math.sin(2 * Math.PI * freq * t) * env * vol;
+      if (freq2) sample += Math.sin(2 * Math.PI * freq2 * t) * env * vol * 0.45;
+      if (o.noise) sample += (Math.random() * 2 - 1) * env * vol * o.noise;
+      const clipped = Math.max(-1, Math.min(1, sample));
+      view.setInt16(44 + i * 2, (clipped * 32767) | 0, true);
+    }
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return "data:audio/wav;base64," + btoa(binary);
+  }
+
+  function htmlUri(kind) {
+    if (htmlUriCache[kind]) return htmlUriCache[kind];
+    let uri;
+    if (kind === "beep") uri = makeWavDataUri(880, 0.22, 0.9, { decay: 8 });
+    else if (kind === "pop") uri = makeWavDataUri(720, 0.1, 0.75, { decay: 18, freq2: 240 });
+    else if (kind === "crack") uri = makeWavDataUri(1400, 0.12, 0.7, { decay: 22, noise: 0.55 });
+    else if (kind === "tick") uri = makeWavDataUri(980, 0.05, 0.45, { decay: 40 });
+    else if (kind === "wood") uri = makeWavDataUri(392, 0.35, 0.55, { decay: 6, freq2: 588 });
+    else uri = makeWavDataUri(90, 0.18, 0.95, { decay: 12, freq2: 180, noise: 0.25 }); // thud
+    htmlUriCache[kind] = uri;
+    return uri;
+  }
+
+  function playHtmlSfx(kind) {
+    if (muted) return;
+    try {
+      const key = kind || "thud";
+      let a = htmlPool[key];
+      if (!a) {
+        a = new Audio(htmlUri(key));
+        a.preload = "auto";
+        htmlPool[key] = a;
+      }
+      a.pause();
+      a.currentTime = 0;
+      a.volume = key === "beep" ? 1 : 0.92;
+      const p = a.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (_) {}
+  }
+
+  /** Unlock HTMLAudio inside a user gesture (silent priming clip). */
+  function pokeHtmlUnlock() {
+    try {
+      const a = new Audio(htmlUri("tick"));
+      a.volume = 0.01;
+      const p = a.play();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          try {
+            a.pause();
+          } catch (_) {}
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Schedule Web Audio ONLY when ctx is running (fresh currentTime).
+   * If suspended: HTMLAudio fallback immediately + resume().then(schedule).
+   */
+  function withAudio(scheduleFn, htmlKind) {
+    if (muted) {
+      setAudioState("muted");
+      return;
+    }
+    const ctx = ensureAudio();
+    getMasterOut();
+
+    const runWeb = () => {
+      if (muted || !ctx || ctx.state !== "running") return false;
+      try {
+        scheduleFn(ctx, ctx.currentTime);
+        audioReady = true;
+        setAudioState("running");
+        hideUnlockBanner();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    if (ctx && ctx.state === "running") {
+      if (runWeb()) return;
+    }
+
+    // Gesture-safe audible fallback while Web Audio unlocks
+    if (htmlKind) playHtmlSfx(htmlKind);
+
+    if (!ctx) {
+      setAudioState("no-ctx");
+      showUnlockBanner();
+      return;
+    }
+
+    pokeSilentBuffer(ctx);
+    setAudioState("unlocking");
+
+    const afterResume = () => {
+      if (runWeb()) return;
+      if (ctx.state === "suspended") {
+        setAudioState("suspended");
+        showUnlockBanner();
+      } else {
+        setAudioState(ctx.state || "unknown");
+      }
+    };
+
+    try {
+      const p = ctx.resume();
+      if (p && typeof p.then === "function") {
+        resumeChain = p.then(afterResume).catch(afterResume);
+      } else {
+        afterResume();
+      }
+    } catch (_) {
+      afterResume();
+    }
+  }
+
   function setMuted(v) {
     muted = !!v;
     const out = getMasterOut();
     if (out) out.gain.value = muted ? 0 : 1.35;
     try {
-      localStorage.setItem("chuqikou-mute", muted ? "1" : "0");
+      localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
     } catch (_) {}
+    setAudioState(muted ? "muted" : audioReady ? "running" : "idle");
     syncUnlockBanner();
     return muted;
   }
@@ -158,12 +347,12 @@
     return muted;
   }
 
+  // Default unmuted. Only "1" mutes — never treat missing/other as mute.
   try {
-    muted = localStorage.getItem("chuqikou-mute") === "1";
-  } catch (_) {}
-
-  let audioReady = false;
-  let unlockBannerEl = null;
+    muted = localStorage.getItem(MUTE_KEY) === "1";
+  } catch (_) {
+    muted = false;
+  }
 
   function noiseBurst(ctx, t, dur, opts) {
     const o = opts || {};
@@ -191,251 +380,271 @@
   }
 
   function playThud(intensity) {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const i = Math.max(0, Math.min(3, intensity == null ? 1 : intensity));
-    // Sub bass punch
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(95 + i * 40, t);
-    osc.frequency.exponentialRampToValueAtTime(36, t + 0.16);
-    filter.type = "lowpass";
-    filter.frequency.value = 380;
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.62 + i * 0.22, t + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(outNode());
-    osc.start(t);
-    osc.stop(t + 0.22);
-    // Mid body click
-    const mid = ctx.createOscillator();
-    const mg = ctx.createGain();
-    mid.type = "triangle";
-    mid.frequency.setValueAtTime(260 + i * 70, t);
-    mid.frequency.exponentialRampToValueAtTime(70, t + 0.055);
-    mg.gain.setValueAtTime(0.0001, t);
-    mg.gain.exponentialRampToValueAtTime(0.38 + i * 0.14, t + 0.002);
-    mg.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-    mid.connect(mg);
-    mg.connect(outNode());
-    mid.start(t);
-    mid.stop(t + 0.08);
-    // Transient noise transient
-    noiseBurst(ctx, t, 0.045, {
-      freq: 1400 + i * 200,
-      type: "highpass",
-      Q: 0.7,
-      gain: 0.42 + i * 0.14,
-      decay: 0.08,
-    });
-    noiseBurst(ctx, t, 0.09, {
-      freq: 320 + i * 90,
-      type: "bandpass",
-      Q: 0.85,
-      gain: 0.4 + i * 0.12,
-      decay: 0.14,
-    });
-  }
-
-  function playPop(pitch, loudness) {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const p = pitch == null ? 1 : pitch;
-    const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime((780 + Math.random() * 520) * p, t);
-    osc.frequency.exponentialRampToValueAtTime(110 * p, t + 0.08);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.48 * loud, t + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
-    osc.connect(gain);
-    gain.connect(outNode());
-    osc.start(t);
-    osc.stop(t + 0.12);
-    // Thick membrane snap
-    noiseBurst(ctx, t, 0.05, {
-      freq: 2200 * p,
-      type: "bandpass",
-      Q: 1.6,
-      gain: 0.38 * loud,
-      decay: 0.09,
-    });
-    noiseBurst(ctx, t, 0.07, {
-      freq: 420 * p,
-      type: "lowpass",
-      gain: 0.28 * loud,
-      decay: 0.16,
-    });
-  }
-
-  function playWhoosh() {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const bufferSize = Math.floor(ctx.sampleRate * 0.28);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-    }
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.setValueAtTime(1600, t);
-    filter.frequency.exponentialRampToValueAtTime(220, t + 0.24);
-    filter.Q.value = 0.65;
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.52, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(outNode());
-    src.start(t);
-  }
-
-  function playCrack(big) {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const scale = big ? 1.85 : 1.15;
-    noiseBurst(ctx, t, 0.08, { freq: 3200, type: "highpass", gain: 0.62 * scale, decay: 0.08 });
-    noiseBurst(ctx, t, 0.12, { freq: 1100, type: "bandpass", Q: 0.75, gain: 0.48 * scale, decay: 0.16 });
-    noiseBurst(ctx, t, 0.16, { freq: 280, type: "lowpass", gain: 0.36 * scale, decay: 0.22 });
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.setValueAtTime(big ? 1800 : 1300, t);
-    osc.frequency.exponentialRampToValueAtTime(280, t + 0.1);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.28 * scale, t + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-    osc.connect(gain);
-    gain.connect(outNode());
-    osc.start(t);
-    osc.stop(t + 0.13);
-  }
-
-  function playBurst() {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(280, t);
-    osc.frequency.exponentialRampToValueAtTime(32, t + 0.48);
-    gain.gain.setValueAtTime(0.68, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-    osc.connect(gain);
-    gain.connect(outNode());
-    osc.start(t);
-    osc.stop(t + 0.56);
-    // Bass boom
-    const bass = ctx.createOscillator();
-    const bg = ctx.createGain();
-    bass.type = "sine";
-    bass.frequency.setValueAtTime(90, t);
-    bass.frequency.exponentialRampToValueAtTime(28, t + 0.35);
-    bg.gain.setValueAtTime(0.55, t);
-    bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-    bass.connect(bg);
-    bg.connect(outNode());
-    bass.start(t);
-    bass.stop(t + 0.42);
-    noiseBurst(ctx, t, 0.22, { freq: 2800, type: "highpass", gain: 0.55, decay: 0.12 });
-    noiseBurst(ctx, t, 0.35, { freq: 420, type: "lowpass", gain: 0.62, decay: 0.28 });
-    playWhoosh();
-  }
-
-  function playWoodChime() {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const freqs = [392, 588, 784];
-    const peaks = [0.34, 0.14, 0.07];
-    freqs.forEach((f, i) => {
+    withAudio((ctx, t) => {
+      const i = Math.max(0, Math.min(3, intensity == null ? 1 : intensity));
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
       osc.type = "sine";
-      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.setValueAtTime(95 + i * 40, t);
+      osc.frequency.exponentialRampToValueAtTime(36, t + 0.16);
       filter.type = "lowpass";
-      filter.frequency.value = 2400;
+      filter.frequency.value = 380;
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peaks[i], t + 0.004);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
+      gain.gain.exponentialRampToValueAtTime(0.62 + i * 0.22, t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(outNode());
       osc.start(t);
-      osc.stop(t + 0.5);
-    });
-    // Crisp wood attack
-    noiseBurst(ctx, t, 0.035, { freq: 920, type: "bandpass", Q: 1.8, gain: 0.32, decay: 0.08 });
-    noiseBurst(ctx, t, 0.05, { freq: 380, type: "bandpass", Q: 1.2, gain: 0.22, decay: 0.12 });
+      osc.stop(t + 0.22);
+      const mid = ctx.createOscillator();
+      const mg = ctx.createGain();
+      mid.type = "triangle";
+      mid.frequency.setValueAtTime(260 + i * 70, t);
+      mid.frequency.exponentialRampToValueAtTime(70, t + 0.055);
+      mg.gain.setValueAtTime(0.0001, t);
+      mg.gain.exponentialRampToValueAtTime(0.38 + i * 0.14, t + 0.002);
+      mg.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      mid.connect(mg);
+      mg.connect(outNode());
+      mid.start(t);
+      mid.stop(t + 0.08);
+      noiseBurst(ctx, t, 0.045, {
+        freq: 1400 + i * 200,
+        type: "highpass",
+        Q: 0.7,
+        gain: 0.42 + i * 0.14,
+        decay: 0.08,
+      });
+      noiseBurst(ctx, t, 0.09, {
+        freq: 320 + i * 90,
+        type: "bandpass",
+        Q: 0.85,
+        gain: 0.4 + i * 0.12,
+        decay: 0.14,
+      });
+    }, "thud");
+  }
+
+  function playPop(pitch, loudness) {
+    withAudio((ctx, t) => {
+      const p = pitch == null ? 1 : pitch;
+      const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime((780 + Math.random() * 520) * p, t);
+      osc.frequency.exponentialRampToValueAtTime(110 * p, t + 0.08);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.48 * loud, t + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+      osc.connect(gain);
+      gain.connect(outNode());
+      osc.start(t);
+      osc.stop(t + 0.12);
+      noiseBurst(ctx, t, 0.05, {
+        freq: 2200 * p,
+        type: "bandpass",
+        Q: 1.6,
+        gain: 0.38 * loud,
+        decay: 0.09,
+      });
+      noiseBurst(ctx, t, 0.07, {
+        freq: 420 * p,
+        type: "lowpass",
+        gain: 0.28 * loud,
+        decay: 0.16,
+      });
+    }, "pop");
+  }
+
+  function playWhoosh() {
+    withAudio((ctx, t) => {
+      const bufferSize = Math.floor(ctx.sampleRate * 0.28);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1600, t);
+      filter.frequency.exponentialRampToValueAtTime(220, t + 0.24);
+      filter.Q.value = 0.65;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.52, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(outNode());
+      src.start(t);
+    }, "thud");
+  }
+
+  function playCrack(big) {
+    withAudio((ctx, t) => {
+      const scale = big ? 1.85 : 1.15;
+      noiseBurst(ctx, t, 0.08, { freq: 3200, type: "highpass", gain: 0.62 * scale, decay: 0.08 });
+      noiseBurst(ctx, t, 0.12, { freq: 1100, type: "bandpass", Q: 0.75, gain: 0.48 * scale, decay: 0.16 });
+      noiseBurst(ctx, t, 0.16, { freq: 280, type: "lowpass", gain: 0.36 * scale, decay: 0.22 });
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(big ? 1800 : 1300, t);
+      osc.frequency.exponentialRampToValueAtTime(280, t + 0.1);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.28 * scale, t + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(gain);
+      gain.connect(outNode());
+      osc.start(t);
+      osc.stop(t + 0.13);
+    }, "crack");
+  }
+
+  function playBurst() {
+    withAudio((ctx, t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(280, t);
+      osc.frequency.exponentialRampToValueAtTime(32, t + 0.48);
+      gain.gain.setValueAtTime(0.68, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      osc.connect(gain);
+      gain.connect(outNode());
+      osc.start(t);
+      osc.stop(t + 0.56);
+      const bass = ctx.createOscillator();
+      const bg = ctx.createGain();
+      bass.type = "sine";
+      bass.frequency.setValueAtTime(90, t);
+      bass.frequency.exponentialRampToValueAtTime(28, t + 0.35);
+      bg.gain.setValueAtTime(0.55, t);
+      bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      bass.connect(bg);
+      bg.connect(outNode());
+      bass.start(t);
+      bass.stop(t + 0.42);
+      noiseBurst(ctx, t, 0.22, { freq: 2800, type: "highpass", gain: 0.55, decay: 0.12 });
+      noiseBurst(ctx, t, 0.35, { freq: 420, type: "lowpass", gain: 0.62, decay: 0.28 });
+    }, "thud");
+    // layered whoosh via its own path (may HTML-fallback once)
+    playWhoosh();
+  }
+
+  function playWoodChime() {
+    withAudio((ctx, t) => {
+      const freqs = [392, 588, 784];
+      const peaks = [0.34, 0.14, 0.07];
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(f, t);
+        filter.type = "lowpass";
+        filter.frequency.value = 2400;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(peaks[i], t + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(outNode());
+        osc.start(t);
+        osc.stop(t + 0.5);
+      });
+      noiseBurst(ctx, t, 0.035, { freq: 920, type: "bandpass", Q: 1.8, gain: 0.32, decay: 0.08 });
+      noiseBurst(ctx, t, 0.05, { freq: 380, type: "bandpass", Q: 1.2, gain: 0.22, decay: 0.12 });
+    }, "wood");
   }
 
   function playTick() {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.value = 980;
-    gain.gain.setValueAtTime(0.14, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
-    osc.connect(gain);
-    gain.connect(outNode());
-    osc.start(t);
-    osc.stop(t + 0.05);
+    withAudio((ctx, t) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = 980;
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+      osc.connect(gain);
+      gain.connect(outNode());
+      osc.start(t);
+      osc.stop(t + 0.05);
+    }, "tick");
   }
 
-  /** Soft knead ticks while holding squeeze ball */
   function playKnead(intensity) {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    const t = ctx.currentTime;
-    const i = Math.max(0.2, Math.min(1.4, intensity == null ? 0.5 : intensity));
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(160 + i * 40, t);
-    osc.frequency.exponentialRampToValueAtTime(90, t + 0.06);
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.12 + i * 0.08, t + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-    osc.connect(gain);
-    gain.connect(outNode());
-    osc.start(t);
-    osc.stop(t + 0.08);
+    withAudio((ctx, t) => {
+      const i = Math.max(0.2, Math.min(1.4, intensity == null ? 0.5 : intensity));
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(160 + i * 40, t);
+      osc.frequency.exponentialRampToValueAtTime(90, t + 0.06);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.12 + i * 0.08, t + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      osc.connect(gain);
+      gain.connect(outNode());
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }, "tick");
   }
 
-  /** Splat / release for squeeze + 爆浆 */
   function playSplat() {
-    const ctx = ensureAudio();
-    if (!ctx || muted) return;
-    pokeSilentBuffer(ctx);
     playPop(0.65, 1.85);
-    const t = ctx.currentTime;
-    noiseBurst(ctx, t, 0.14, { freq: 280, type: "lowpass", gain: 0.55, decay: 0.25 });
-    noiseBurst(ctx, t, 0.08, { freq: 1600, type: "bandpass", Q: 1.1, gain: 0.4, decay: 0.12 });
+    withAudio((ctx, t) => {
+      noiseBurst(ctx, t, 0.14, { freq: 280, type: "lowpass", gain: 0.55, decay: 0.25 });
+      noiseBurst(ctx, t, 0.08, { freq: 1600, type: "bandpass", Q: 1.1, gain: 0.4, decay: 0.12 });
+    }, "pop");
+  }
+
+  /** Loud verification beep — forces unmute and plays HTML + WebAudio. */
+  function playTestBeep() {
+    setMuted(false);
+    pokeHtmlUnlock();
+    playHtmlSfx("beep");
+    const ctx = ensureAudio();
+    if (ctx) {
+      pokeSilentBuffer(ctx);
+      getMasterOut();
+      const fire = () => {
+        if (!ctx || ctx.state !== "running") return;
+        try {
+          const t = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "square";
+          osc.frequency.setValueAtTime(880, t);
+          osc.frequency.setValueAtTime(660, t + 0.12);
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.7, t + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+          osc.connect(gain);
+          gain.connect(outNode());
+          osc.start(t);
+          osc.stop(t + 0.3);
+          audioReady = true;
+          setAudioState("running");
+          hideUnlockBanner();
+        } catch (_) {}
+      };
+      if (ctx.state === "running") fire();
+      else {
+        setAudioState("unlocking");
+        try {
+          ctx.resume().then(fire).catch(fire);
+        } catch (_) {
+          fire();
+        }
+      }
+    } else {
+      setAudioState("html-only");
+    }
   }
 
   /* —— Visual juice —— */
@@ -565,15 +774,25 @@
     }, 600);
   }
 
-  /* —— Zoom guards —— */
+
+  /* —— Zoom guards (iOS / WeChat / Chrome) —— */
   (function blockPinchZoom() {
     const opt = { passive: false, capture: true };
     function prevent(e) {
-      e.preventDefault();
+      try {
+        e.preventDefault();
+      } catch (_) {}
     }
     ["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
       document.addEventListener(type, prevent, opt);
     });
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches && e.touches.length > 1) prevent(e);
+      },
+      opt
+    );
     document.addEventListener(
       "touchmove",
       (e) => {
@@ -588,6 +807,39 @@
       },
       opt
     );
+    // Double-tap zoom (iOS): collapse rapid second tap on non-editable targets
+    let lastTouchEnd = 0;
+    document.addEventListener(
+      "touchend",
+      (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd < 320) {
+          const t = e.target;
+          const tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+          if (tag !== "input" && tag !== "textarea" && tag !== "select") prevent(e);
+        }
+        lastTouchEnd = now;
+      },
+      opt
+    );
+    function lockViewportMeta() {
+      try {
+        let meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+          meta = document.createElement("meta");
+          meta.setAttribute("name", "viewport");
+          (document.head || document.documentElement).appendChild(meta);
+        }
+        meta.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        );
+      } catch (_) {}
+    }
+    lockViewportMeta();
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", lockViewportMeta, { once: true });
+    }
   })();
 
   /* Unlock audio on every gesture until running (iOS / WeChat safe) */
@@ -606,13 +858,14 @@
     el.type = "button";
     el.className = "audio-unlock-banner";
     el.setAttribute("aria-label", "点击开启音效");
-    el.textContent = "🔊 点按开启音效";
+    el.innerHTML = "🔊 点这里开启音效<br><small>听不见？再点一次测试</small>";
     el.addEventListener(
       "pointerdown",
       (e) => {
         e.preventDefault();
         e.stopPropagation();
         unlockAudioFromGesture(true);
+        playTestBeep();
       },
       { passive: false }
     );
@@ -625,24 +878,52 @@
   }
 
   function unlockAudioFromGesture(forceBanner) {
+    pokeHtmlUnlock();
     const ctx = ensureAudio();
     if (!ctx) {
+      playHtmlSfx("beep");
       showUnlockBanner();
+      setAudioState("no-ctx");
       return Promise.resolve(null);
     }
     pokeSilentBuffer(ctx);
     getMasterOut();
+    setAudioState(ctx.state === "running" ? "running" : "unlocking");
+
     const finish = () => {
       if (ctx.state === "running") {
         audioReady = true;
+        setAudioState("running");
         hideUnlockBanner();
+        // Audible confirm only when forced (banner / test / unmute)
+        if (forceBanner) {
+          try {
+            const t = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = 660;
+            gain.gain.setValueAtTime(0.35, t);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+            osc.connect(gain);
+            gain.connect(outNode());
+            osc.start(t);
+            osc.stop(t + 0.14);
+          } catch (_) {}
+        }
       } else if (forceBanner || !audioReady) {
+        setAudioState("suspended");
         showUnlockBanner();
       }
       return ctx;
     };
+
     if (ctx.state === "suspended") {
-      return ctx.resume().then(finish).catch(finish);
+      try {
+        return ctx.resume().then(finish).catch(finish);
+      } catch (_) {
+        return Promise.resolve(finish());
+      }
     }
     return Promise.resolve(finish());
   }
@@ -665,14 +946,12 @@
     }
   });
 
-  // If autoplay policy blocks, surface Chinese tip after a short beat
   setTimeout(() => {
     if (muted || audioReady) return;
     const ctx = audioCtx;
     if (!ctx || ctx.state === "suspended") showUnlockBanner();
-  }, 900);
+  }, 700);
 
-  /** Wire mute button if present */
   function bindMuteButton(btn) {
     if (!btn) return;
     const sync = () => {
@@ -684,21 +963,56 @@
     sync();
     btn.addEventListener("click", () => {
       setMuted(!muted);
-      if (!muted) unlockAudioFromGesture(true);
+      if (!muted) {
+        unlockAudioFromGesture(true);
+        playTestBeep();
+      }
       sync();
     });
   }
 
-  /** HUD helper */
+  function bindTestSfxButton(btn) {
+    if (!btn) return;
+    btn.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMuted(false);
+        unlockAudioFromGesture(true);
+        playTestBeep();
+        // refresh mute icon if present
+        const muteBtn = document.getElementById("muteBtn");
+        if (muteBtn) {
+          muteBtn.textContent = "🔊";
+          muteBtn.setAttribute("aria-pressed", "false");
+        }
+      },
+      { passive: false }
+    );
+  }
+
   function setHud(el, text) {
     if (el) el.textContent = text || "";
   }
+
+  // Auto-wire test button when present
+  function autoBindTest() {
+    bindTestSfxButton(document.getElementById("testSfxBtn"));
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", autoBindTest);
+  } else {
+    autoBindTest();
+  }
+  setAudioState(muted ? "muted" : "idle");
 
   const api = {
     ensureAudio,
     ensureAudioAsync,
     getMasterOut,
     audioPeak,
+    audioFreqPeak,
     unlockAudio: unlockAudioFromGesture,
     playThud,
     playPop,
@@ -709,6 +1023,7 @@
     playWoodChime,
     playKnead,
     playSplat,
+    playTestBeep,
     reducedMotion: () => reducedMotion,
     vibrate,
     recordHit,
@@ -724,6 +1039,7 @@
     setMuted,
     isMuted,
     bindMuteButton,
+    bindTestSfxButton,
     setHud,
     setStat: setHud,
   };

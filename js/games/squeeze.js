@@ -149,7 +149,7 @@
   function onDown(e) {
     if (bursting) return;
     e.preventDefault();
-    V.ensureAudio();
+    if (V.unlockAudio) V.unlockAudio(false); else V.ensureAudio();
     pressing = true;
     holdMs = 0;
     startX = e.clientX;
