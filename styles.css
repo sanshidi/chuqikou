@@ -26,11 +26,13 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  touch-action: manipulation;
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
+  overscroll-behavior-y: contain;
   font-family: var(--font-body);
   background: var(--ink);
   color: var(--paper);
