@@ -99,7 +99,7 @@
       V.playCrack(false);
       V.vibeHit("hit");
       V.screenShake(stage, 1.2, 3);
-      V.hitStop(16);
+      V.hitStop(8);
       V.impactFlash(stage, {});
       V.spawnFloatingText(stage, "还没倒!", lx, ly, { px: true });
       return;
@@ -118,12 +118,12 @@
       V.playCrack(true);
       V.vibeHit("boss");
       V.screenShake(stage, 2.5, st.combo);
-      V.hitStop(26);
+      V.hitStop(14);
       V.impactFlash(stage, { heavy: true, chromatic: true });
     } else {
       V.vibeHit(st.combo >= 5 ? "heavy" : "hit");
       V.screenShake(stage, 1.0 + Math.min(1.3, st.combo / 8), st.combo);
-      V.hitStop(st.combo >= 6 ? 22 : 14);
+      V.hitStop(st.combo >= 6 ? 12 : 8);
       V.impactFlash(stage, { heavy: st.combo >= 6 });
     }
     V.spawnFloatingText(stage, isBoss ? "BOSS KO +" + (20 + st.combo) : "砸！" + (st.combo > 1 ? " x" + st.combo : ""), lx, ly, {
@@ -131,7 +131,7 @@
       critical: isBoss || st.combo >= 7,
     });
     V.createParticleBurst(stage, lx, ly, {
-      count: isBoss ? 18 : 10,
+      count: isBoss ? 10 : 6,
       big: true,
       star: isBoss || st.combo >= 5,
       dist: isBoss ? 90 : 50,

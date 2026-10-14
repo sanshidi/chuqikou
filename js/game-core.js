@@ -507,9 +507,13 @@
   function playThud(intensity) {
     const i = Math.max(0, Math.min(3, intensity == null ? 1 : intensity));
     withAudio((ctx, t) => {
-      const rate = 0.88 + i * 0.06 + (Math.random() * 0.08 - 0.04);
-      const gain = 0.85 + i * 0.18;
-      if (tryPlaySample(ctx, t, "thud", { rate, gain })) return;
+      const rate = 0.82 + i * 0.07 + (Math.random() * 0.08 - 0.04);
+      const gain = 0.92 + i * 0.2;
+      if (tryPlaySample(ctx, t, "thud", { rate, gain })) {
+        // heavy: layer whoosh for meatier bag punch
+        if (i >= 1.35) tryPlaySample(ctx, t, "whoosh", { rate: 0.95 + Math.random() * 0.15, gain: 0.28 + i * 0.08 });
+        return;
+      }
       // synth fallback if sample not decoded yet
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -536,7 +540,7 @@
     const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
     withAudio((ctx, t) => {
       const rate = Math.max(0.65, Math.min(1.7, p * (0.95 + Math.random() * 0.12)));
-      if (tryPlaySample(ctx, t, "pop", { rate, gain: 0.7 * loud })) return;
+      if (tryPlaySample(ctx, t, "pop", { rate, gain: 0.82 * loud })) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
@@ -584,7 +588,10 @@
     const scale = big ? 1.85 : 1.15;
     withAudio((ctx, t) => {
       const rate = (big ? 0.85 : 1.05) + Math.random() * 0.12;
-      if (tryPlaySample(ctx, t, "crack", { rate, gain: 0.75 * scale })) return;
+      if (tryPlaySample(ctx, t, "crack", { rate, gain: 0.88 * scale })) {
+        if (big) tryPlaySample(ctx, t, "thud", { rate: 0.7, gain: 0.22 });
+        return;
+      }
       noiseBurst(ctx, t, 0.08, { freq: 3200, type: "highpass", gain: 0.62 * scale, decay: 0.08 });
       noiseBurst(ctx, t, 0.12, { freq: 1100, type: "bandpass", Q: 0.75, gain: 0.48 * scale, decay: 0.16 });
     }, "crack");
@@ -593,8 +600,9 @@
   function playBurst() {
     let usedSample = false;
     withAudio((ctx, t) => {
-      if (tryPlaySample(ctx, t, "burst", { rate: 0.92 + Math.random() * 0.12, gain: 1.05 })) {
-        tryPlaySample(ctx, t + 0.02, "whoosh", { rate: 1.1, gain: 0.45 });
+      if (tryPlaySample(ctx, t, "burst", { rate: 0.88 + Math.random() * 0.14, gain: 1.15 })) {
+        tryPlaySample(ctx, t + 0.015, "whoosh", { rate: 1.05, gain: 0.55 });
+        tryPlaySample(ctx, t, "thud", { rate: 0.75, gain: 0.35 });
         usedSample = true;
         return;
       }
@@ -617,7 +625,7 @@
   function playWoodChime() {
     withAudio((ctx, t) => {
       const rate = 0.96 + Math.random() * 0.1;
-      if (tryPlaySample(ctx, t, "wood", { rate, gain: 0.9 })) return;
+      if (tryPlaySample(ctx, t, "wood", { rate, gain: 1.0 })) return;
       const freqs = [392, 588, 784];
       const peaks = [0.34, 0.14, 0.07];
       freqs.forEach((f, i) => {
@@ -675,8 +683,8 @@
 
   function playSplat() {
     withAudio((ctx, t) => {
-      if (tryPlaySample(ctx, t, "splat", { rate: 0.9 + Math.random() * 0.2, gain: 0.95 })) {
-        tryPlaySample(ctx, t, "pop", { rate: 0.7, gain: 0.35 });
+      if (tryPlaySample(ctx, t, "splat", { rate: 0.88 + Math.random() * 0.22, gain: 1.05 })) {
+        tryPlaySample(ctx, t, "pop", { rate: 0.65, gain: 0.4 });
         return;
       }
       noiseBurst(ctx, t, 0.14, { freq: 280, type: "lowpass", gain: 0.55, decay: 0.25 });
@@ -754,7 +762,7 @@
 
   /* —— Visual juice (perf-capped) —— */
   /** 0=off/reduced, 1=low, 2=med, 3=high */
-  let juiceQuality = reducedMotion ? 0 : 3;
+  let juiceQuality = reducedMotion ? 0 : 2;
   let juiceAlive = 0;
   let floatAlive = 0;
   let shockAlive = 0;
@@ -770,11 +778,11 @@
   let qualityWatchStarted = false;
   const particlePool = [];
   const flashByParent = typeof WeakMap !== "undefined" ? new WeakMap() : null;
-  const MAX_PARTICLES_HIGH = 64;
-  const MAX_PARTICLES_MED = 40;
-  const MAX_PARTICLES_LOW = 24;
-  const MAX_FLOAT = 12;
-  const MAX_SHOCK = 3;
+  const MAX_PARTICLES_HIGH = 36;
+  const MAX_PARTICLES_MED = 22;
+  const MAX_PARTICLES_LOW = 12;
+  const MAX_FLOAT = 6;
+  const MAX_SHOCK = 2;
 
   function maxParticles() {
     if (juiceQuality <= 0) return 0;
@@ -791,20 +799,32 @@
     if (qualityWatchStarted || reducedMotion) return;
     if (typeof requestAnimationFrame !== "function") return;
     qualityWatchStarted = true;
+    let watchRaf = 0;
     function tick(ts) {
+      watchRaf = 0;
+      if (typeof document !== "undefined" && document.hidden) {
+        lastFrameTs = 0;
+        return; // pause unused rAF while tab hidden
+      }
       if (lastFrameTs) {
         const dt = ts - lastFrameTs;
         if (dt > 0 && dt < 120) {
           frameEma = frameEma * 0.9 + dt * 0.1;
-          if (frameEma > 28 && juiceQuality > 1) juiceQuality = 1;
-          else if (frameEma > 22 && juiceQuality > 2) juiceQuality = 2;
-          else if (frameEma < 17.5 && juiceQuality < 3) juiceQuality = Math.min(3, juiceQuality + 1);
+          if (frameEma > 26 && juiceQuality > 1) juiceQuality = 1;
+          else if (frameEma > 20 && juiceQuality > 2) juiceQuality = 2;
+          else if (frameEma < 16.5 && juiceQuality < 2) juiceQuality = Math.min(2, juiceQuality + 1);
         }
       }
       lastFrameTs = ts;
-      requestAnimationFrame(tick);
+      watchRaf = requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && !watchRaf) {
+        lastFrameTs = 0;
+        watchRaf = requestAnimationFrame(tick);
+      }
+    });
+    watchRaf = requestAnimationFrame(tick);
   }
   try {
     if (document.readyState === "loading") {
@@ -846,7 +866,8 @@
 
   function spawnFloatingText(parent, text, x, y, opts) {
     if (!parent) return;
-    if (juiceQuality <= 0 && !reducedMotion) return;
+    if (juiceQuality <= 0) return;
+    if (juiceQuality === 1 && floatAlive >= 2) return;
     if (floatAlive >= MAX_FLOAT) {
       const old = parent.querySelector(".float-dmg");
       if (old) {
@@ -888,8 +909,8 @@
     const cls = i >= 2.2 ? "is-shake-mega" : i >= 1.2 ? "is-shake-hard" : "is-shake";
     const now = performance.now();
     // Coalesce: if already shaking hard enough, just bump amp — avoid layout thrash
-    if (now - lastShakeAt < 48 && (el.classList.contains("is-shake") || el.classList.contains("is-shake-hard") || el.classList.contains("is-shake-mega"))) {
-      el.style.setProperty("--shake-amp", (6 * i).toFixed(1) + "px");
+    if (now - lastShakeAt < 90 && (el.classList.contains("is-shake") || el.classList.contains("is-shake-hard") || el.classList.contains("is-shake-mega"))) {
+      el.style.setProperty("--shake-amp", (3.2 * i).toFixed(1) + "px");
       if (cls === "is-shake-mega" && !el.classList.contains("is-shake-mega")) {
         el.classList.remove("is-shake", "is-shake-hard");
         el.classList.add("is-shake-mega");
@@ -908,7 +929,7 @@
     // One reflow only when restarting the CSS animation
     void el.offsetWidth;
     el.classList.add(cls);
-    el.style.setProperty("--shake-amp", (6 * i).toFixed(1) + "px");
+    el.style.setProperty("--shake-amp", (3.2 * i).toFixed(1) + "px");
     clearTimeout(shakeTimer);
     shakeTimer = setTimeout(() => {
       el.classList.remove("is-shake", "is-shake-hard", "is-shake-mega");
@@ -918,7 +939,8 @@
 
   function screenShake(el, intensity, combo) {
     if (!el || juiceQuality <= 0) return;
-    if (juiceQuality === 1 && (intensity == null ? 1 : intensity) < 0.9) return;
+    if (juiceQuality === 1 && (intensity == null ? 1 : intensity) < 1.2) return;
+    intensity = (intensity == null ? 1 : intensity) * (juiceQuality <= 2 ? 0.72 : 0.85);
     // Coalesce multiple shakes in the same frame to one apply
     if (shakePending) {
       shakePending.intensity = Math.max(shakePending.intensity, intensity == null ? 1 : intensity);
@@ -938,9 +960,8 @@
    * Uses a flag for canvas loops; CSS only dims stage (does NOT pause every descendant).
    */
   function hitStop(ms) {
-    if (juiceQuality <= 0) return;
-    if (juiceQuality === 1) ms = Math.min(ms == null ? 16 : ms, 16);
-    const dur = Math.max(10, Math.min(28, ms == null ? 20 : ms));
+    if (juiceQuality <= 1) return; // low-end / reduced: skip hit-stop entirely
+    const dur = Math.max(8, Math.min(18, ms == null ? 12 : ms));
     const until = performance.now() + dur;
     if (until <= hitStopUntil + 2) return;
     hitStopUntil = until;
@@ -1003,10 +1024,10 @@
   function createParticleBurst(parent, x, y, opts) {
     if (!parent || juiceQuality <= 0) return;
     const o = opts || {};
-    let want = o.count || 18;
-    if (juiceQuality === 1) want = Math.min(want, 8);
-    else if (juiceQuality === 2) want = Math.min(want, 16);
-    else want = Math.min(want, 28);
+    let want = o.count || 10;
+    if (juiceQuality === 1) want = Math.min(want, 5);
+    else if (juiceQuality === 2) want = Math.min(want, 9);
+    else want = Math.min(want, 14);
     let budget = particleBudget();
     while (budget < Math.min(6, want) && juiceAlive > 0) {
       pruneOldestBurst(parent);

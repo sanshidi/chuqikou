@@ -31,8 +31,8 @@
     return a + Math.random() * (b - a);
   }
 
-  const MAX_SHARDS = 70;
-  const MAX_CRACKS = 24;
+  const MAX_SHARDS = 36;
+  const MAX_CRACKS = 14;
 
   function resize() {
     const nextDpr = Math.min(2, window.devicePixelRatio || 1);
@@ -104,6 +104,7 @@
   }
 
   function smash(clientX, clientY) {
+    ensureLoop();
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
@@ -117,14 +118,14 @@
     V.playThud(0.7 + Math.min(1.2, st.combo * 0.1));
     V.vibeHit(st.combo >= 6 ? "heavy" : "hit");
     V.screenShake(stage, 1.0 + Math.min(1.5, st.combo / 7), st.combo);
-    V.hitStop(st.combo >= 5 ? 22 : 14);
+    V.hitStop(st.combo >= 5 ? 12 : 8);
     V.impactFlash(stage, { heavy: st.combo >= 7, chromatic: st.combo >= 8 });
     V.spawnFloatingText(stage, st.combo >= 6 ? "粉碎 +" + st.combo : "咔 +" + (4 + st.combo), x, y, {
       px: true,
       critical: st.combo >= 7,
     });
     V.createParticleBurst(stage, x, y, {
-      count: 8 + Math.min(8, st.combo),
+      count: 5 + Math.min(4, st.combo),
       dist: 50 + st.combo * 4,
       big: true,
       colors: ["#c8e8ff", "#5ce1e6", "#f4e8d8", "#fff"],
@@ -217,12 +218,17 @@
   function loop() {
     if (!running) return;
     draw();
-    raf = requestAnimationFrame(loop);
+    if (!document.hidden) raf = requestAnimationFrame(loop);
+    else raf = 0;
   }
 
   resize();
   V.setHud(hud, "砸了 0 下 · 点屏幕砸出裂纹");
-  raf = requestAnimationFrame(loop);
+  function ensureLoop() {
+    if (!raf && !document.hidden) raf = requestAnimationFrame(loop);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) ensureLoop(); });
+  ensureLoop();
   canvas.addEventListener(
     "pointerdown",
     (e) => {

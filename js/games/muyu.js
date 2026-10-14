@@ -123,7 +123,7 @@
     // crisp float pop — tiny soft pulse, no rage shake
     if (!reduced) {
       V.createParticleBurst(stage, fx, fy + 30, {
-        count: 5,
+        count: 3,
         dist: 28,
         colors: ["#5ce1e6", "#b8fff5", "#f4e8d8"],
         ms: 600,

@@ -167,7 +167,7 @@
         const sr = stage.getBoundingClientRect();
         if (i % 5 === 0) {
           V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-            count: 8,
+            count: 5,
             dist: 36,
             big: true,
             colors: ["#5ce1e6", "#f4e8d8", "#ffe566"],

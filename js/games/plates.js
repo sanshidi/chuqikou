@@ -30,7 +30,7 @@
     return a + Math.random() * (b - a);
   }
 
-  const MAX_PARTICLES = 80;
+  const MAX_PARTICLES = 40;
   let alivePlates = 0;
 
   function resize() {
@@ -87,7 +87,7 @@
   function shatter(p, combo) {
     const q = V.getJuiceQuality ? V.getJuiceQuality() : 3;
     const cap = q <= 1 ? 18 : q === 2 ? 28 : 36;
-    const shardN = Math.min(cap, 14 + (combo || 1) * 2 + (p.boss ? 12 : 0));
+    const shardN = Math.min(cap, 8 + (combo || 1) + (p.boss ? 6 : 0));
     for (let i = 0; i < shardN; i++) {
       const ang = rand(0, Math.PI * 2);
       const sp = rand(3.2, 11) * (p.boss ? 1.45 : 1.15);
@@ -116,7 +116,7 @@
       V.playCrack(false);
       V.vibeHit("hit");
       V.screenShake(stage, 1.1, 2);
-      V.hitStop(18);
+      V.hitStop(10);
       V.impactFlash(stage, {});
       V.spawnFloatingText(stage, "裂纹!", p.x, p.y, { px: true });
       const dustN = (V.getJuiceQuality && V.getJuiceQuality() <= 1) ? 4 : 8;
@@ -140,11 +140,11 @@
     if (p.boss) {
       V.playBurst();
       V.vibeHit("boss");
-      V.hitStop(26);
+      V.hitStop(14);
       V.impactFlash(stage, { heavy: true, chromatic: true });
     } else {
       V.vibeHit(st.combo >= 5 ? "heavy" : "hit");
-      V.hitStop(st.combo >= 6 ? 24 : 16);
+      V.hitStop(st.combo >= 6 ? 12 : 8);
       V.impactFlash(stage, { heavy: st.combo >= 6, chromatic: st.combo >= 8 });
     }
     camPunch = p.boss ? 14 : 7 + Math.min(6, st.combo * 0.5);
@@ -152,7 +152,7 @@
     const label = p.boss ? "大盘粉碎 +" + (24 + st.combo) : "+" + (6 + Math.min(18, st.combo));
     V.spawnFloatingText(stage, label, p.x, p.y, { px: true, critical: !!p.boss || st.combo >= 7 });
     V.createParticleBurst(stage, p.x, p.y, {
-      count: p.boss ? 20 : 10,
+      count: p.boss ? 12 : 6,
       big: true,
       star: !!p.boss,
       dist: p.boss ? 100 : 55,
@@ -268,7 +268,8 @@
     }
     ctx.restore();
 
-    raf = requestAnimationFrame(loop);
+    if (!document.hidden) raf = requestAnimationFrame(loop);
+    else raf = 0;
   }
 
   function onPointer(e) {

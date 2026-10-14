@@ -86,12 +86,12 @@
     V.playCrack(false);
     V.vibeHit("burst");
     V.screenShake(stage, 2.4, 8);
-    V.hitStop(24);
+    V.hitStop(12);
     V.impactFlash(stage, { heavy: true, chromatic: true });
     const r = ball.getBoundingClientRect();
     const sr = stage.getBoundingClientRect();
     V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-      count: 22,
+      count: 10,
       dist: 120,
       colors: ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8", "#fff"],
       star: true,
@@ -142,8 +142,12 @@
     sx += (targetSx - sx) * 0.38;
     sy += (targetSy - sy) * 0.38;
     render();
-    raf = requestAnimationFrame(loop);
+    if (!document.hidden) raf = requestAnimationFrame(loop);
+    else raf = 0;
   }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && !raf) raf = requestAnimationFrame(loop);
+  });
   raf = requestAnimationFrame(loop);
 
   function onDown(e) {
@@ -186,14 +190,14 @@
     V.vibeHit(depth > 0.35 ? "heavy" : "hit");
     V.screenShake(stage, 0.7 + depth * 1.4, st.combo);
     if (depth > 0.3) {
-      V.hitStop(20);
+      V.hitStop(10);
       V.impactFlash(stage, {});
     }
     V.createParticleBurst(
       stage,
       ball.getBoundingClientRect().left + ball.offsetWidth / 2 - stage.getBoundingClientRect().left,
       ball.getBoundingClientRect().top + ball.offsetHeight / 2 - stage.getBoundingClientRect().top,
-      { count: 16, dist: 48 + depth * 40, big: true, colors: ["#ffe566", "#ff3d7f", "#fff"] }
+      { count: 8, dist: 40 + depth * 32, big: true, colors: ["#ffe566", "#ff3d7f", "#fff"] }
     );
     V.setHud(hud, "捏了 " + squeezes + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
     setTimeout(() => {

@@ -62,7 +62,7 @@
   }
   updateHud();
 
-  const MAX_RIP_SHARDS = 16;
+  const MAX_RIP_SHARDS = 8;
   let ripShardAlive = 0;
 
   function spawnShards(progress) {
@@ -108,7 +108,7 @@
     V.playBurst();
     V.vibeHit("burst");
     V.screenShake(stage, 2.2, st.combo);
-    V.hitStop(24);
+    V.hitStop(12);
     V.impactFlash(stage, { heavy: true, chromatic: true });
     spawnShards(1);
     const r = wrap.getBoundingClientRect();
@@ -118,7 +118,7 @@
       critical: true,
     });
     V.createParticleBurst(stage, r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, {
-      count: 18,
+      count: 8,
       big: true,
       star: true,
       dist: 100,

@@ -56,11 +56,25 @@
 
   let lastT = performance.now();
   function loop(t) {
+    if (document.hidden) { raf = 0; return; }
     const dt = Math.min(0.033, (t - lastT) / 1000);
     lastT = t;
     physics(dt);
+    // idle: skip frames when nearly still
+    if (Math.abs(vel) < 0.002 && Math.abs(angle) < 0.002 && performance.now() > squashUntil) {
+      swing.style.transform = "rotate(" + angle + "rad)";
+      raf = 0;
+      return;
+    }
     raf = requestAnimationFrame(loop);
   }
+  function ensureLoop() {
+    if (!raf && !document.hidden) {
+      lastT = performance.now();
+      raf = requestAnimationFrame(loop);
+    }
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) ensureLoop(); });
   raf = requestAnimationFrame(loop);
 
   function bagCenter() {
@@ -77,6 +91,7 @@
     angle += side * 0.06 * pow;
     squashUntil = performance.now() + 110;
 
+    ensureLoop();
     count++;
     const st = V.recordHit("bag", { vibrateMs: 0 });
     const dmg = Math.round(10 + pow * 14 + (st.combo > 4 ? st.combo * 1.5 : 0));
@@ -92,12 +107,14 @@
 
     const lx = clientX - stage.getBoundingClientRect().left;
     const ly = clientY - stage.getBoundingClientRect().top;
-    V.spawnFloatingText(stage, crit ? "CRITICAL +" + dmg : "+" + dmg, lx, ly, {
-      px: true,
-      critical: crit,
-    });
+    if (crit || st.combo % 2 === 0) {
+      V.spawnFloatingText(stage, crit ? "暴击 +" + dmg : "+" + dmg, lx, ly, {
+        px: true,
+        critical: crit,
+      });
+    }
     V.createParticleBurst(stage, lx, ly, {
-      count: crit ? 18 : 10,
+      count: crit ? 10 : 6,
       star: true,
       big: true,
       colors: crit ? ["#ff3d7f", "#ffe566", "#fff", "#5ce1e6"] : ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8"],
@@ -105,7 +122,7 @@
     });
     V.screenShake(stage, 0.9 + pow * 0.75, st.combo);
     if (crit || pow >= 1.5) {
-      V.hitStop(crit ? 24 : 16);
+      V.hitStop(crit ? 14 : 10);
       V.impactFlash(stage, { heavy: crit, chromatic: crit });
     } else if (pow >= 1.1) {
       V.impactFlash(stage, {});

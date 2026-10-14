@@ -43,7 +43,7 @@
     peakRate = Math.max(peakRate, mashTimes.length);
   }
 
-  const MAX_LETTERS = 28;
+  const MAX_LETTERS = 16;
   let letterAlive = 0;
 
   function spawnLetter(ch, x, y, wild) {
@@ -132,10 +132,10 @@
     V.playCrack(true);
     V.vibeHit("burst");
     V.screenShake(stage, 3.0, 12);
-    V.hitStop(26);
+    V.hitStop(14);
     V.impactFlash(stage, { heavy: true, chromatic: true });
     V.createParticleBurst(stage, stage.clientWidth / 2, stage.clientHeight / 2, {
-      count: 24,
+      count: 12,
       dist: 140,
       star: true,
       big: true,
