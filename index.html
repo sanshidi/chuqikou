@@ -109,6 +109,11 @@
       </div>
       <p class="pool-lead">一位倾听者，<strong>不是心理医生</strong>。默认完全离线的模板共情；可选在本机用 WebGPU 跑小模型（无 API Key）。对话不上传。</p>
       <p class="companion-disclaimer" role="note">本功能仅供情绪疏导练习，不能替代专业心理咨询或医疗建议。若有自伤/自杀念头，请立即联系热线或身边可信的人。</p>
+      <div class="companion-hotline-banner" role="note">
+        <strong>危机时请先联系真人</strong>
+        <span><a href="tel:4001619995">400-161-9995</a>（希望24 · 全天）</span>
+        <span><a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线网站</a></span>
+      </div>
 
       <div class="companion-modes" role="group" aria-label="倾听方式">
         <button type="button" class="chip is-on" id="btnModeRule" aria-pressed="true">模板倾听</button>
@@ -126,15 +131,16 @@
       </div>
 
       <div class="companion-log" id="companionLog" role="log" aria-live="polite" aria-relevant="additions"></div>
+      <p class="companion-empty" id="companionEmpty" hidden>对话空着——写下此刻最堵的一句，或点上方标签起头。</p>
 
       <div class="companion-compose">
         <label for="companionInput" class="sr-only">对树洞伙伴说</label>
-        <textarea id="companionInput" rows="2" maxlength="800" placeholder="想倒的情绪写这儿……Enter 发送，Shift+Enter 换行"></textarea>
-        <button type="button" class="neon-btn cyan" id="btnCompanionSend" disabled>发送</button>
+        <textarea id="companionInput" rows="2" maxlength="800" placeholder="想倒的情绪写这儿……Enter 发送，Shift+Enter 换行" aria-describedby="companionStatus"></textarea>
+        <button type="button" class="neon-btn cyan" id="btnCompanionSend" disabled aria-busy="false">发送</button>
       </div>
       <p class="companion-status" id="companionStatus" role="status"></p>
       <p class="privacy-note" role="note">默认模板回复纯本地；若启用本地小模型，权重从 CDN 下载到本机缓存，推理仍在浏览器内。无账号、无服务器密钥。</p>
-      <p class="companion-hotlines">危机支持：<a href="tel:4001619995">400-161-9995</a>（希望24）· <a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线</a></p>
+      <p class="companion-hotlines" aria-label="危机支持热线">危机支持（可随时点）：<a href="tel:4001619995">400-161-9995</a>（希望24）· <a href="https://www.lifeline.org.cn/" target="_blank" rel="noopener noreferrer">生命热线</a></p>
     </section>
 
     <!-- Mood journal + trend -->

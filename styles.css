@@ -2171,6 +2171,51 @@ a.stall {
   border: 1px solid rgba(255, 61, 127, 0.28);
   clip-path: polygon(0 6px, 6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
 }
+
+.companion-hotline-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.85rem;
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #ffe566;
+  background: rgba(255, 229, 102, 0.1);
+  border: 1px solid rgba(255, 229, 102, 0.45);
+  clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+.companion-hotline-banner strong {
+  color: #fff3a8;
+  letter-spacing: 0.04em;
+}
+.companion-hotline-banner a {
+  color: #5ce1e6;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.companion-empty {
+  margin: -0.35rem 0 0.65rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+.companion.is-busy .companion-compose textarea {
+  opacity: 0.85;
+}
+.companion.is-busy #btnCompanionSend {
+  opacity: 0.9;
+}
+.companion-status[data-kind="load"] {
+  color: var(--neon-yellow, #ffe566);
+}
+.companion-status[data-kind="crisis"] {
+  color: #ffe566;
+  font-weight: 600;
+}
+
 .companion-modes {
   display: flex;
   flex-wrap: wrap;
@@ -2299,6 +2344,11 @@ a.stall {
 .companion-status[data-kind="warn"],
 .companion-status[data-kind="crisis"] { color: var(--magenta); }
 .companion-hotlines {
+  margin-top: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255, 229, 102, 0.35);
+  background: rgba(255, 229, 102, 0.06);
+  font-size: 0.82rem;
   margin: 0.35rem 0 0;
   font-size: 0.78rem;
   color: var(--muted);

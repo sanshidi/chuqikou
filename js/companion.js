@@ -56,10 +56,11 @@
 
 
   const GREETING =
-    "你好，我是树洞伙伴——一位倾听者，不是心理医生。\n" +
-    "你可以随便倒情绪，内容只在本机，不会上传。\n" +
-    "若你正经历危机或有伤害自己的念头，请优先联系真人专业支持（见下方热线）。\n" +
-    "今天想从哪儿说起？";
+    "你好，我是树洞伙伴——倾听者，不是心理医生。\n\n" +
+    "你可以随便倒情绪：工作、家里、关系、或说不清的堵。内容只在本机，不会上传。\n\n" +
+    "若正难受到想伤害自己，请先打热线，再回来写也完全可以。\n" +
+    "希望24：400-161-9995\n\n" +
+    "点上方小标签起个头，或直接写下此刻最堵的一句。";
 
   /* —— State —— */
   let mode = "rule"; // "rule" | "webllm"
@@ -496,8 +497,17 @@
 
   function setBusy(v) {
     busy = v;
-    if (el.send) el.send.disabled = v || !(el.input && el.input.value.trim());
-    if (el.input) el.input.disabled = v && mode === "webllm";
+    if (el.send) {
+      el.send.disabled = v || !(el.input && el.input.value.trim());
+      el.send.setAttribute("aria-busy", v ? "true" : "false");
+      el.send.textContent = v ? "倾听中…" : "发送";
+    }
+    if (el.input) {
+      el.input.disabled = v && mode === "webllm";
+      el.input.setAttribute("aria-busy", v ? "true" : "false");
+    }
+    if (el.section) el.section.classList.toggle("is-busy", !!v);
+    if (el.log) el.log.classList.toggle("is-empty", !el.log.querySelector(".companion-msg"));
   }
 
   async function hasWebGPU() {
@@ -632,14 +642,14 @@
     setBusy(true);
     try {
       if (mode === "webllm") {
-        setStatus("本地模型思考中…", "load");
+        setStatus("本地模型思考中…请稍候", "load");
         await webllmReply(text);
-        setStatus("本地小模型 · 本机推理", "ok");
+        setStatus("本地小模型 · 本机推理 · 已回复", "ok");
       } else {
-        // slight delay so it feels like a reply turn
+        setStatus("正在听…", "load");
         await new Promise((r) => setTimeout(r, 280 + Math.random() * 220));
         appendMsg("bot", ruleReply(text));
-        setStatus("模板倾听 · 完全离线", "ok");
+        setStatus("模板倾听 · 完全离线 · 已接住", "ok");
       }
     } finally {
       setBusy(false);
@@ -666,8 +676,9 @@
     resetCompanionSession();
     el.log.innerHTML = "";
     appendMsg("bot", GREETING);
+    setBusy(false);
     setStatus(
-      mode === "webllm" ? "本地小模型 · 对话已清空" : "模板倾听 · 对话已清空",
+      mode === "webllm" ? "本地小模型 · 对话已清空，可以重新说" : "模板倾听 · 对话已清空，可以重新说",
       "ok"
     );
   }
@@ -685,8 +696,11 @@
     if (!el.log || !el.input || !el.send) return;
 
     appendMsg("bot", GREETING);
-    setStatus("模板倾听 · 完全离线 · 无 API Key", "ok");
+    setStatus("模板倾听 · 完全离线 · 无 API Key · 随时可写", "ok");
     syncModeButtons();
+    if (el.log) el.log.classList.remove("is-empty");
+    const emptyHint = document.getElementById("companionEmpty");
+    if (emptyHint) emptyHint.hidden = true;
 
     el.send.addEventListener("click", () => handleSend());
     el.input.addEventListener("keydown", (e) => {
