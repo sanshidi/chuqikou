@@ -391,6 +391,43 @@
     } catch (_) {}
   }
 
+  /** Prefetch critical WAVs (network + HTTP cache) without blocking UI. */
+  let criticalPrefetchDone = false;
+  function prefetchCriticalAudio() {
+    if (criticalPrefetchDone) return;
+    criticalPrefetchDone = true;
+    const critical = ["thud", "whoosh", "pop"];
+    const run = () => {
+      critical.forEach((kind) => {
+        try {
+          const url = sampleUrl(kind);
+          if (typeof fetch === "function") {
+            fetch(url, { cache: "force-cache" }).catch(() => {});
+          }
+          if (typeof Audio !== "undefined" && !htmlPool[kind]) {
+            const a = new Audio(url);
+            a.preload = "auto";
+            htmlPool[kind] = a;
+          }
+        } catch (_) {}
+      });
+      preloadSamples();
+    };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1200 });
+    else setTimeout(run, 180);
+  }
+  try {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", prefetchCriticalAudio);
+    } else {
+      prefetchCriticalAudio();
+    }
+  } catch (_) {
+    try {
+      prefetchCriticalAudio();
+    } catch (__) {}
+  }
+
   /**
    * Schedule Web Audio ONLY when ctx is running (fresh currentTime).
    * If suspended: HTMLAudio fallback immediately + resume().then(schedule).
@@ -778,10 +815,10 @@
   let qualityWatchStarted = false;
   const particlePool = [];
   const flashByParent = typeof WeakMap !== "undefined" ? new WeakMap() : null;
-  const MAX_PARTICLES_HIGH = 36;
-  const MAX_PARTICLES_MED = 22;
-  const MAX_PARTICLES_LOW = 12;
-  const MAX_FLOAT = 6;
+  const MAX_PARTICLES_HIGH = 28;
+  const MAX_PARTICLES_MED = 16;
+  const MAX_PARTICLES_LOW = 8;
+  const MAX_FLOAT = 4;
   const MAX_SHOCK = 2;
 
   function maxParticles() {
@@ -800,16 +837,19 @@
     if (typeof requestAnimationFrame !== "function") return;
     qualityWatchStarted = true;
     let watchRaf = 0;
+    let skipFrames = 0;
     function tick(ts) {
       watchRaf = 0;
       if (typeof document !== "undefined" && document.hidden) {
         lastFrameTs = 0;
         return; // pause unused rAF while tab hidden
       }
-      if (lastFrameTs) {
-        const dt = ts - lastFrameTs;
+      // Sample every other frame to cut rAF overhead on weak devices
+      skipFrames ^= 1;
+      if (!skipFrames && lastFrameTs) {
+        const dt = (ts - lastFrameTs) / 2;
         if (dt > 0 && dt < 120) {
-          frameEma = frameEma * 0.9 + dt * 0.1;
+          frameEma = frameEma * 0.88 + dt * 0.12;
           if (frameEma > 26 && juiceQuality > 1) juiceQuality = 1;
           else if (frameEma > 20 && juiceQuality > 2) juiceQuality = 2;
           else if (frameEma < 16.5 && juiceQuality < 2) juiceQuality = Math.min(2, juiceQuality + 1);
@@ -961,7 +1001,7 @@
    */
   function hitStop(ms) {
     if (juiceQuality <= 1) return; // low-end / reduced: skip hit-stop entirely
-    const dur = Math.max(8, Math.min(18, ms == null ? 12 : ms));
+    const dur = Math.max(8, Math.min(16, ms == null ? 10 : ms));
     const until = performance.now() + dur;
     if (until <= hitStopUntil + 2) return;
     hitStopUntil = until;
@@ -1024,10 +1064,10 @@
   function createParticleBurst(parent, x, y, opts) {
     if (!parent || juiceQuality <= 0) return;
     const o = opts || {};
-    let want = o.count || 10;
-    if (juiceQuality === 1) want = Math.min(want, 5);
-    else if (juiceQuality === 2) want = Math.min(want, 9);
-    else want = Math.min(want, 14);
+    let want = o.count || 8;
+    if (juiceQuality === 1) want = Math.min(want, 4);
+    else if (juiceQuality === 2) want = Math.min(want, 7);
+    else want = Math.min(want, 10);
     let budget = particleBudget();
     while (budget < Math.min(6, want) && juiceAlive > 0) {
       pruneOldestBurst(parent);
@@ -1349,6 +1389,7 @@
     playSplat,
     playTestBeep,
     preloadSamples,
+    prefetchCriticalAudio,
     sampleBuffers,
     reducedMotion: () => reducedMotion,
     vibrate,
