@@ -160,6 +160,61 @@ angerMsgs.forEach((m, i) => {
   console.log(`    → ${VC.ruleReply(m)}`);
 });
 
+
+// --- Meaning-aware: prefer concrete LEX pair (同事+KPI, not just 甩锅) ---
+VC.resetSession();
+{
+  const msg = "同事甩锅给我KPI，憋屈死了";
+  const keys = VC.extractKeywords(msg);
+  assert(keys.includes("同事"), `keys must include 同事 → ${JSON.stringify(keys)}`);
+  assert(keys.includes("KPI"), `keys must include KPI → ${JSON.stringify(keys)}`);
+  const reply = VC.ruleReply(msg);
+  assert(reply.includes("同事"), `reply must echo 同事\n  → ${reply}`);
+  assert(reply.includes("KPI"), `reply must echo KPI (concrete noun)\n  → ${reply}`);
+}
+
+// --- Cold-violence case must echo 冷暴力 ---
+VC.resetSession();
+{
+  const msg = "对象给我冷暴力，已读不回，特别委屈";
+  const keys = VC.extractKeywords(msg);
+  assert(keys.includes("冷暴力") || keys.includes("对象"), `keys touch relation → ${JSON.stringify(keys)}`);
+  const reply = VC.ruleReply(msg);
+  const hit = ["冷暴力", "对象", "已读不回", "已读", "委屈"].filter((k) => reply.includes(k));
+  assert(hit.length >= 2, `must echo ≥2 concrete keys (${hit})\n  → ${reply}`);
+}
+
+// --- Crisis path ---
+VC.resetSession();
+{
+  const crisisMsgs = ["我不想活了", "有点想自杀", "想结束生命"];
+  for (const m of crisisMsgs) {
+    const reply = VC.ruleReply(m);
+    assert(/400-161-9995/.test(reply), `crisis must include hotline for: ${m}`);
+    assert(/希望24|生命热线|专业/.test(reply), `crisis must mention support for: ${m}`);
+    assert(!/心理医生/.test(reply) || /不是心理医生|不能替代/.test(reply), `must not claim therapist: ${m}`);
+  }
+}
+
+// --- Mid section should often weave a key (not tone-only) across 5 fresh sessions ---
+{
+  let woven = 0;
+  const samples = [
+    "老板天天骂我，加班到半夜，气炸了",
+    "房租和下个月绩效叠在一起，焦虑得睡不好",
+    "和妈妈又吵架了，催婚催得我崩溃",
+    "对象给我冷暴力，已读不回，特别委屈",
+    "同事甩锅给我KPI，憋屈死了",
+  ];
+  for (const m of samples) {
+    VC.resetSession();
+    const keys = VC.extractKeywords(m).slice(0, 2);
+    const reply = VC.ruleReply(m);
+    if (keys.every((k) => reply.includes(k))) woven++;
+  }
+  assert(woven >= 4, `≥4/5 replies echo top-2 keys (got ${woven}/5)`);
+}
+
 if (fails) {
   console.error(`\n${fails} assertion(s) failed`);
   process.exit(1);

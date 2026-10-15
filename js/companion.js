@@ -140,14 +140,14 @@
 
     // 2) Topic lexicon — always keep
     const LEX = [
-      "老板", "同事", "加班", "裁员", "KPI", "绩效", "开会", "客户", "甲方",
-      "父母", "妈妈", "爸爸", "亲戚", "催婚", "原生家庭",
-      "对象", "伴侣", "分手", "冷暴力", "吵架", "背叛", "朋友",
-      "房租", "房贷", "工资", "负债", "失业",
-      "失眠", "睡不好", "头疼", "胸口", "心慌",
-      "考试", "论文", "导师", "学校", "实习",
-      "微信", "电话", "消息", "已读",
-      "阴阳怪气", "甩锅", "点名", "羞辱",
+      "老板", "同事", "加班", "裁员", "KPI", "绩效", "开会", "客户", "甲方", "领导",
+      "父母", "妈妈", "爸爸", "亲戚", "催婚", "原生家庭", "家里",
+      "对象", "伴侣", "分手", "冷暴力", "吵架", "背叛", "朋友", "前任",
+      "房租", "房贷", "工资", "负债", "失业", "加班费",
+      "失眠", "睡不好", "头疼", "胸口", "心慌", "胃痛",
+      "考试", "论文", "导师", "学校", "实习", "答辩",
+      "微信", "电话", "消息", "已读", "已读不回",
+      "阴阳怪气", "甩锅", "点名", "羞辱", "甩脸", "效率",
     ];
     for (const w of LEX) {
       if (t.includes(w)) add(w, 100);
@@ -180,29 +180,26 @@
       add(cleaned, hasLex ? 40 : 20);
     }
 
-    // Sort by score desc, then prefer shorter concrete (2–4) among similar scores
-    scored.sort((a, b) => b.score - a.score || a.k.length - b.k.length);
+    // Sort: score desc, then lexicon/emo boost, then prefer shorter concrete
+    function isLex(k) { return LEX.includes(k); }
+    function isEmo(k) { return EMO.includes(k); }
+    scored.sort((a, b) => {
+      const boost = (x) => (isLex(x.k) ? 30 : 0) + (isEmo(x.k) ? 12 : 0) - (x.k.length > 6 ? 4 : 0);
+      const sa = a.score + boost(a);
+      const sb = b.score + boost(b);
+      return sb - sa || a.k.length - b.k.length;
+    });
 
     const out = [];
     for (const { k } of scored) {
-      // Drop if this key is a broken fragment of an already-chosen longer key
-      // OR if a chosen key is a lexicon word contained in this key (prefer lexicon)
       let skip = false;
       for (const u of out) {
-        if (u === k) {
-          skip = true;
-          break;
-        }
-        // If both overlap heavily, keep higher-scored (already ordered)
-        if (u.includes(k) && u.length - k.length <= 2) {
-          skip = true;
-          break;
-        }
-        if (k.includes(u) && LEX.includes(u)) {
-          // keep lexicon u; skip longer wrapper unless wrapper is also high-value clause
+        if (u === k) { skip = true; break; }
+        if (u.includes(k) && u.length - k.length <= 2) { skip = true; break; }
+        if (k.includes(u) && isLex(u)) {
           if (k.length > u.length + 4) {
             /* allow both */
-          } else if (!LEX.includes(k) && !EMO.includes(k)) {
+          } else if (!isLex(k) && !isEmo(k)) {
             skip = true;
             break;
           }
@@ -213,24 +210,34 @@
       if (out.length >= 5) break;
     }
 
-    // Ensure lexicon hits that appeared in text are represented even after cap
-    for (const w of LEX) {
-      if (t.includes(w) && !out.includes(w)) {
-        // replace last non-lex if needed
-        const idx = out.findIndex((x) => !LEX.includes(x) && !EMO.includes(x));
-        if (out.length < 5) out.push(w);
+    // Force concrete LEX hits into the front of the list (meaning-aware priority)
+    const lexHits = LEX.filter((w) => t.includes(w));
+    // Prefer longer lexicon phrases first (已读不回 > 已读)
+    lexHits.sort((a, b) => b.length - a.length || LEX.indexOf(a) - LEX.indexOf(b));
+    const preferred = [];
+    for (const w of lexHits) {
+      if (preferred.some((p) => p.includes(w) || w.includes(p))) continue;
+      preferred.push(w);
+      if (preferred.length >= 3) break;
+    }
+    for (const w of preferred) {
+      if (!out.includes(w)) {
+        const idx = out.findIndex((x) => !isLex(x) && !isEmo(x));
+        if (out.length < 5) out.unshift(w);
         else if (idx >= 0) out[idx] = w;
-        else if (!out.includes(w)) {
-          out[out.length - 1] = w;
-        }
+        else out[out.length - 1] = w;
       }
     }
-    // Same for EMO
+    // Stable: move preferred LEX to front while keeping relative order of others
+    const front = preferred.filter((w) => out.includes(w));
+    const rest = out.filter((w) => !front.includes(w));
+    const merged = front.concat(rest).slice(0, 5);
+
     for (const w of EMO) {
-      if (t.includes(w) && !out.includes(w) && out.length < 5) out.push(w);
+      if (t.includes(w) && !merged.includes(w) && merged.length < 5) merged.push(w);
     }
 
-    return out;
+    return merged;
   }
 
   function detectBucket(t) {
@@ -257,7 +264,11 @@
   function pickUnique(candidates, nRecent) {
     nRecent = nRecent || 6;
     const recent = lastReplies.slice(-nRecent);
-    const fresh = candidates.filter((c) => !recent.includes(c));
+    const recentFp = recent.map((r) => String(r).slice(0, 18));
+    let fresh = candidates.filter((c) => !recent.includes(c));
+    // Also avoid same opening fingerprint when possible
+    const fpFresh = fresh.filter((c) => !recentFp.includes(String(c).slice(0, 18)));
+    if (fpFresh.length) fresh = fpFresh;
     const pool = fresh.length ? fresh : candidates;
     return pick(pool);
   }
@@ -290,14 +301,17 @@
     const startsOk =
       reply.startsWith(head) ||
       reply.startsWith("你提到了「" + must[0] + "」") ||
+      reply.startsWith("关于「" + must[0] + "」") ||
       (must[1] &&
         (reply.startsWith("「" + must[0] + "」和「" + must[1] + "」") ||
-          reply.startsWith("关于「" + must[0] + "」和「" + must[1] + "」")));
+          reply.startsWith("「" + must[0] + "」加上「" + must[1] + "」") ||
+          reply.startsWith("关于「" + must[0] + "」和「" + must[1] + "」"))) ||
+      (must.length === 1 && reply.startsWith("「" + must[0] + "」"));
     const hasAll = must.every((k) => reply.includes(k));
     if (startsOk && hasAll) return reply;
     // Strip a broken leading reflect, then prepend canonical head
     let rest = reply.replace(
-      /^(你提到了「[^」]+」(和「[^」]+」)?[。.——，]*|关于「[^」]+」(和「[^」]+」)?[，。]*|「[^」]+」和「[^」]+」[^\u4e00-\u9fff]{0,8})/,
+      /^(你提到了「[^」]+」(和「[^」]+」)?[。．—\-—，,.]*|关于「[^」]+」(和「[^」]+」)?[，。]*|「[^」]+」(和|加上)「[^」]+」[^\u4e00-\u9fff]{0,12}|「[^」]+」这两个字[^\u4e00-\u9fff]{0,8})/,
       ""
     );
     rest = rest.trim();
@@ -325,31 +339,49 @@
         "关于「" + key0 + "」和「" + key1 + "」，我听见了。",
         "「" + key0 + "」和「" + key1 + "」叠在一起，确实容易把人压扁。",
         "你提到了「" + key0 + "」和「" + key1 + "」——这话里压着不少力气。",
+        "「" + key0 + "」加上「" + key1 + "」，听起来这一阵子并不轻松。",
       ]);
     } else if (keys.length === 1) {
       opener = pickUnique([
         "你提到了「" + key0 + "」。",
         "关于「" + key0 + "」，我听见了。",
         "你提到了「" + key0 + "」——听起来这件事在你心里占了很大一块。",
+        "「" + key0 + "」这两个字一出来，分量就不轻。",
       ]);
     }
 
-    const toneList =
-      (bucket && TONE[bucket.id]) || TONE.generic;
-    const mid = pickUnique(toneList);
+    const toneList = (bucket && TONE[bucket.id]) || TONE.generic;
+    // Mid: weave concrete keys into empathy so replies feel meaning-aware, not generic tone-only
+    const midCands = toneList.slice();
+    if (key0 && key1) {
+      midCands.push(
+        "「" + key0 + "」和「" + key1 + "」缠在一起时，人很容易只剩紧绷。",
+        "先被「" + key0 + "」戳一下，再被「" + key1 + "」压住——委屈会叠层。",
+        "听你讲「" + key0 + "」和「" + key1 + "」，我能感到里头的火气或不甘。"
+      );
+    } else if (key0) {
+      midCands.push(
+        "「" + key0 + "」这件事，听起来不是一句「想开点」能打发的。",
+        "和「" + key0 + "」较劲的时候，人会特别需要被接住。"
+      );
+    }
+    const mid = pickUnique(midCands);
 
     const questions = [];
     if (key0 && key1) {
       questions.push(
         "关于「" + key0 + "」和「" + key1 + "」，哪一块更想先倒出来？",
         "「" + key0 + "」这件事，和「" + key1 + "」叠在一起时，你最堵的一句是什么？",
-        "若只盯着「" + key0 + "」，此刻身体哪里最紧——胸口、太阳穴，还是胃？"
+        "如果只能先放下一个，你更想暂时放下「" + key0 + "」还是「" + key1 + "」？",
+        "「" + key1 + "」出现的时候，「" + key0 + "」让你最先想到的画面是什么？",
+        "此刻说「" + key0 + "」和「" + key1 + "」，你更想被理解情绪，还是一起理清发生了什么？"
       );
     } else if (key0) {
       questions.push(
         "关于「" + key0 + "」，此刻最堵的那一句是什么？",
         "「" + key0 + "」这件事，你最想对谁说一句却还没说出口？",
-        "「" + key0 + "」让你最难受的，是不公平，还是无力感？"
+        "「" + key0 + "」让你最难受的，是不公平，还是无力感？",
+        "如果把「" + key0 + "」写成一句话发给信任的人，你会怎么开头？"
       );
     }
     if (deepen && knownKeys.length) {
@@ -374,7 +406,7 @@
         "继续说也行，停一停也行——你现在更想怎样？"
       );
     }
-    const q = pickUnique(questions);
+    const q = pickUnique(questions, 8);
 
     let reply = joinParts([opener, mid, q]);
     reply = forceReflectStart(reply, keys);
