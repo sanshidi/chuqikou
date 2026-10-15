@@ -1,6 +1,7 @@
 /**
  * 出气袋 — directional punch + angular swing physics
  * Interaction: pointer hit side relative to bag center; swipe velocity = power
+ * Perf: edge-only squash class, cached stage rect, lean juice (no light hitStop)
  */
 (function () {
   "use strict";
@@ -16,6 +17,16 @@
   let lastPtr = null;
   let raf = 0;
   let squashUntil = 0;
+  let squashing = false;
+
+  /** Cached stage rect — avoid multi getBoundingClientRect per punch */
+  let stageRect = null;
+  let stageRectAt = 0;
+  let lastFloatAt = 0;
+  let lastCrackAt = 0;
+  let lastWhooshAt = 0;
+  let lastShockAt = 0;
+  let lastFlashAt = 0;
 
   const arena = document.createElement("div");
   arena.className = "bag-arena";
@@ -37,6 +48,15 @@
   const DAMP = 3.6;
   const MAX_A = 1.05;
 
+  function refreshStageRect(force) {
+    const now = performance.now();
+    if (force || !stageRect || now - stageRectAt > 400) {
+      stageRect = stage.getBoundingClientRect();
+      stageRectAt = now;
+    }
+    return stageRect;
+  }
+
   function physics(dt) {
     const acc = -SPRING * angle - DAMP * vel;
     vel += acc * dt;
@@ -50,19 +70,30 @@
       vel *= -0.35;
     }
     swing.style.transform = "rotate(" + angle + "rad)";
-    if (performance.now() < squashUntil) body.classList.add("is-squash");
-    else body.classList.remove("is-squash");
+    // Edge-only class toggle — no classList thrash every rAF frame
+    const wantSquash = performance.now() < squashUntil;
+    if (wantSquash !== squashing) {
+      squashing = wantSquash;
+      body.classList.toggle("is-squash", squashing);
+    }
   }
 
   let lastT = performance.now();
   function loop(t) {
-    if (document.hidden) { raf = 0; return; }
+    if (document.hidden) {
+      raf = 0;
+      return;
+    }
     const dt = Math.min(0.033, (t - lastT) / 1000);
     lastT = t;
     physics(dt);
     // idle: skip frames when nearly still
     if (Math.abs(vel) < 0.002 && Math.abs(angle) < 0.002 && performance.now() > squashUntil) {
       swing.style.transform = "rotate(" + angle + "rad)";
+      if (squashing) {
+        squashing = false;
+        body.classList.remove("is-squash");
+      }
       raf = 0;
       return;
     }
@@ -74,7 +105,16 @@
       raf = requestAnimationFrame(loop);
     }
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) ensureLoop(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) ensureLoop();
+  });
+  window.addEventListener(
+    "resize",
+    () => {
+      stageRect = null;
+    },
+    { passive: true }
+  );
   raf = requestAnimationFrame(loop);
 
   function bagCenter() {
@@ -83,56 +123,90 @@
   }
 
   function hit(clientX, clientY, power) {
+    const jq = V.getJuiceQuality ? V.getJuiceQuality() : 2;
     const c = bagCenter();
+    const sr = refreshStageRect(false);
     const side = clientX < c.x ? 1 : -1;
     const distX = Math.abs(clientX - c.x);
     const pow = Math.max(0.5, Math.min(2.4, power || 0.9 + distX / 200));
     vel += side * pow * 4.2;
     angle += side * 0.06 * pow;
     squashUntil = performance.now() + 110;
+    if (!squashing) {
+      squashing = true;
+      body.classList.add("is-squash");
+    }
 
     ensureLoop();
     count++;
     const st = V.recordHit("bag", { vibrateMs: 0 });
     const dmg = Math.round(10 + pow * 14 + (st.combo > 4 ? st.combo * 1.5 : 0));
     const crit = st.combo >= 7 || pow >= 1.65;
+    const now = performance.now();
+
+    // SFX: thud always (sample path already layers light tick/whoosh/crack).
+    // Extra crack/whoosh/tick only when needed — avoid 4 overlapping voices/hit.
     V.playThud(Math.min(2.4, 0.7 + pow * 0.75));
-    if (crit) V.playCrack(false);
-    if (st.combo >= 2) V.playTick();
-    if (pow >= 1.4) V.playWhoosh();
+    if (crit && jq >= 2 && now - lastCrackAt > 140) {
+      lastCrackAt = now;
+      V.playCrack(false);
+    }
 
     if (crit) V.vibeHit("heavy");
     else if (pow >= 1.3) V.vibeHit("hit");
     else V.vibeHit("tap");
 
-    const lx = clientX - stage.getBoundingClientRect().left;
-    const ly = clientY - stage.getBoundingClientRect().top;
-    if (crit || st.combo % 2 === 0) {
+    const lx = clientX - sr.left;
+    const ly = clientY - sr.top;
+
+    // Floats: crit or every 3rd hit; hard throttle for rapid taps
+    if (jq > 0 && (crit || st.combo % 3 === 0) && now - lastFloatAt > 70) {
+      lastFloatAt = now;
       V.spawnFloatingText(stage, crit ? "暴击 +" + dmg : "+" + dmg, lx, ly, {
         px: true,
         critical: crit,
       });
     }
-    V.createParticleBurst(stage, lx, ly, {
-      count: crit ? 10 : 6,
-      star: true,
-      big: true,
-      colors: crit ? ["#ff3d7f", "#ffe566", "#fff", "#5ce1e6"] : ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8"],
-      dist: 55 + pow * 35,
-    });
-    V.screenShake(stage, 0.9 + pow * 0.75, st.combo);
-    if (crit || pow >= 1.5) {
-      V.hitStop(crit ? 14 : 10);
-      V.impactFlash(stage, { heavy: crit, chromatic: crit });
-    } else if (pow >= 1.1) {
+
+    // Particles: 3–5; skip star/big on light hits
+    if (jq > 0) {
+      const pCount = crit ? (jq >= 2 ? 5 : 3) : jq <= 1 ? 3 : 4;
+      V.createParticleBurst(stage, lx, ly, {
+        count: pCount,
+        star: !!(crit && jq >= 2),
+        big: !!(crit && jq >= 2),
+        colors: crit
+          ? ["#ff3d7f", "#ffe566", "#fff", "#5ce1e6"]
+          : ["#ffe566", "#ff3d7f", "#5ce1e6", "#f4e8d8"],
+        dist: 40 + pow * 28,
+      });
+    }
+
+    // Shake: lighter amp; skip tiny taps when juice already low
+    if (jq > 0 && (crit || pow >= 0.95)) {
+      V.screenShake(stage, 0.5 + pow * 0.4, st.combo);
+    }
+
+    // Prefer NO hitStop — squash transform already sells the punch.
+    // Flash only on crit / heavy, throttled; no chromatic (cheaper paint).
+    if (crit && now - lastFlashAt > 90) {
+      lastFlashAt = now;
+      V.impactFlash(stage, { heavy: true });
+    } else if (pow >= 1.55 && jq >= 2 && now - lastFlashAt > 110) {
+      lastFlashAt = now;
       V.impactFlash(stage, {});
     }
 
-    if (st.combo > 0 && st.combo % 10 === 0) {
-      V.createShockwave(stage, c.x - stage.getBoundingClientRect().left, c.y - stage.getBoundingClientRect().top);
+    if (st.combo > 0 && st.combo % 10 === 0 && now - lastShockAt > 450) {
+      lastShockAt = now;
+      if (jq >= 2) {
+        V.createShockwave(stage, c.x - sr.left, c.y - sr.top);
+      }
       V.playBurst();
       V.vibeHit("burst");
-      V.spawnFloatingText(stage, "连击达 " + st.combo + "！", 50, 18, { critical: true });
+      if (jq > 0) {
+        V.spawnFloatingText(stage, "连击达 " + st.combo + "！", 50, 18, { critical: true });
+      }
       arena.classList.add("combo-flash");
       setTimeout(() => arena.classList.remove("combo-flash"), 220);
     }
@@ -150,6 +224,7 @@
       e.preventDefault();
       if (V.unlockAudio) V.unlockAudio(false);
       else V.ensureAudio();
+      refreshStageRect(true);
       lastPtr = { x: e.clientX, y: e.clientY, t: performance.now() };
       try {
         arena.setPointerCapture(e.pointerId);
@@ -170,7 +245,12 @@
       const power = 0.75 + Math.min(1.8, speed * 20);
       const hx = Math.abs(dx) + Math.abs(dy) > 8 ? e.clientX : lastPtr.x;
       const hy = Math.abs(dx) + Math.abs(dy) > 8 ? e.clientY : lastPtr.y;
-      if (speed > 0.3 || Math.abs(dx) + Math.abs(dy) > 36) V.playWhoosh();
+      const now = performance.now();
+      // Swipe whoosh once, throttled (thud already carries air whoosh)
+      if ((speed > 0.35 || Math.abs(dx) + Math.abs(dy) > 48) && now - lastWhooshAt > 160) {
+        lastWhooshAt = now;
+        V.playWhoosh();
+      }
       hit(hx, hy, power);
       lastPtr = null;
     },

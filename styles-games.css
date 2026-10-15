@@ -288,7 +288,8 @@ html, body {
 /* Hit-stop: brief freeze feel WITHOUT pausing every descendant animation
    (pausing * caused main-thread stalls when hundreds of particle-dots existed). */
 html.is-hitstop .game-stage-full {
-  filter: brightness(1.08) contrast(1.06);
+  /* opacity pulse — cheaper than filter during rapid hits */
+  opacity: 0.97;
 }
 html.is-hitstop .game-stage-full.is-shake,
 html.is-hitstop .game-stage-full.is-shake-hard,
@@ -360,6 +361,7 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   padding-top: 4%;
   cursor: crosshair;
   touch-action: none;
+  contain: layout paint;
 }
 .bag-pivot {
   width: 10px;
@@ -394,14 +396,16 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   display: grid;
   place-items: center;
   transition: border-radius 0.06s;
+  contain: layout paint;
+  will-change: transform;
 }
 .bag-body-xl .bag-face {
   font-size: clamp(2.8rem, 12vw, 4.2rem);
   pointer-events: none;
 }
 .bag-body-xl.is-squash {
-  border-radius: 48% 48% 50% 50% / 35% 35% 60% 60%;
-  transform: scaleX(1.08) scaleY(0.9);
+  border-radius: 48% 48% 50% 50% / 32% 32% 62% 62%;
+  transform: scaleX(1.12) scaleY(0.86);
 }
 .bag-hit-zone {
   position: absolute;
@@ -426,6 +430,14 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   background: linear-gradient(90deg, var(--magenta), #ffe566);
   box-shadow: 0 0 12px rgba(255, 229, 102, 0.5);
   transition: width 0.08s linear;
+}
+/* Bag combo: opacity/transform only — avoid filter on swinging bag */
+.bag-arena.combo-flash {
+  animation: bag-combo-flash 0.2s ease-out;
+}
+@keyframes bag-combo-flash {
+  0%, 100% { opacity: 1; }
+  40% { opacity: 0.88; }
 }
 
 /* ========== BUBBLE — fidget grid ========== */
@@ -832,6 +844,7 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   .game-stage-full.is-shake-mega,
   .impact-flash,
   .combo-flash,
+  .bag-arena.combo-flash,
   .rage-letter,
   .rage-burst-overlay.go,
   .rage-crack.go,
@@ -839,6 +852,9 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   .muyu-btn-xl.is-hit .muyu-mallet,
   .muyu-btn-xl.is-glow .muyu-glow {
     animation: none !important;
+  }
+  .bag-body-xl.is-squash {
+    transform: scaleX(1.04) scaleY(0.96);
   }
   .muyu-btn-xl.is-hit .muyu-svg {
     transform: scale(0.97);
@@ -1045,11 +1061,6 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   100% { opacity: 0; transform: scaleX(1.15); }
 }
 
-.bag-body-xl.is-squash {
-  border-radius: 48% 48% 50% 50% / 32% 32% 62% 62%;
-  transform: scaleX(1.14) scaleY(0.84);
-  filter: brightness(1.15);
-}
 
 /* Tap-to-enable audio (mobile / WeChat) — must be unmissable */
 .audio-unlock-banner {
