@@ -103,7 +103,7 @@
     });
     squeezes++;
     const st = V.recordHit("squeeze", { vibrateMs: 0, comboWindowMs: 1400 });
-    V.setHud(hud, "捏了 " + squeezes + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
+    V.setHud(hud, "次数 " + squeezes + " · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
     setTimeout(reform, 520);
   }
 
@@ -199,7 +199,7 @@
       ball.getBoundingClientRect().top + ball.offsetHeight / 2 - stage.getBoundingClientRect().top,
       { count: 8, dist: 40 + depth * 32, big: true, colors: ["#ffe566", "#ff3d7f", "#fff"] }
     );
-    V.setHud(hud, "捏了 " + squeezes + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
+    V.setHud(hud, "次数 " + squeezes + " · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
     setTimeout(() => {
       if (!pressing && !bursting) {
         targetSx = 1;
@@ -213,5 +213,5 @@
   ball.addEventListener("pointerup", onUp);
   ball.addEventListener("pointercancel", onUp);
 
-  V.setHud(hud, "捏了 0 下 · 按住揉捏 · 松手弹回 · 捏爆有惊喜");
+  V.setHud(hud, "次数 0 · 按住揉捏 · 松手弹回");
 })();

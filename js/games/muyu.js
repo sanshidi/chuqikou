@@ -53,7 +53,7 @@
   function updateHud() {
     V.setHud(
       hud,
-      "功德 " + merit + " · 本局 " + hits + (bestStreak >= 3 ? " · 稳拍 " + bestStreak : "")
+      "功德 " + merit + " · 本局敲 " + hits + (bestStreak >= 3 ? " · 稳拍 " + bestStreak : "")
     );
   }
   updateHud();

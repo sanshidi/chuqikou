@@ -147,7 +147,7 @@
       V.spawnFloatingText(stage, "整面碎裂！", w / 2, h / 2, { px: true, critical: true });
     }
 
-    V.setHud(hud, "砸了 " + hits + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo + (broken ? " · 已碎透" : ""));
+    V.setHud(hud, "次数 " + hits + " · 连击 " + st.combo + " · 最佳 " + st.bestCombo + (broken ? " · 已碎透" : ""));
   }
 
   function clearGlass() {
@@ -156,7 +156,7 @@
     hits = 0;
     broken = false;
     V.playWhoosh();
-    V.setHud(hud, "清屏了 · 再砸一块");
+    V.setHud(hud, "已清屏 · 再砸一块新玻璃");
   }
 
   function draw() {
@@ -225,7 +225,7 @@
   }
 
   resize();
-  V.setHud(hud, "砸了 0 下 · 点屏幕砸出裂纹");
+  V.setHud(hud, "次数 0 · 点屏幕砸出裂纹");
   function ensureLoop() {
     if (!raf && !document.hidden) raf = requestAnimationFrame(loop);
   }

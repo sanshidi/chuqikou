@@ -52,7 +52,7 @@
 
   function updateHud(combo) {
     const bit = combo != null ? " · 连击 " + combo : "";
-    V.setHud(hud, "本局 " + sessionPops + " · 累计 " + lifetime + bit);
+    V.setHud(hud, "本局破 " + sessionPops + " · 累计 " + lifetime + bit);
   }
   updateHud();
 

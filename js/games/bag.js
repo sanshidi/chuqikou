@@ -141,7 +141,7 @@
     if (count > 0 && count % 25 === 0) face.textContent = "😌";
 
     comboFill.style.width = Math.min(100, (st.combo % 10) * 10) + "%";
-    V.setHud(hud, "打了 " + count + " 下 · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
+    V.setHud(hud, "次数 " + count + " · 连击 " + st.combo + " · 最佳 " + st.bestCombo);
   }
 
   arena.addEventListener(
@@ -182,5 +182,5 @@
   });
 
   const best = V.getGameStats("bag").bestCombo || 0;
-  V.setHud(hud, "打了 0 下 · 最佳连击 " + best);
+  V.setHud(hud, "次数 0 · 最佳连击 " + best + " · 甩打开始");
 })();

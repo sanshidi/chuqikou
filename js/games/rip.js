@@ -58,7 +58,7 @@
   sheet.textContent = PHRASES[0];
 
   function updateHud(combo) {
-    V.setHud(hud, "撕了 " + ripped + " 张" + (combo != null ? " · 连击 " + combo : ""));
+    V.setHud(hud, "已撕 " + ripped + " 张" + (combo != null ? " · 连击 " + combo : " · 选句开撕"));
   }
   updateHud();
 

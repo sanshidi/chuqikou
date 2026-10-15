@@ -163,7 +163,7 @@
     fireEl.classList.toggle("on", st.combo >= 5);
     V.setHud(
       hud,
-      "砸碎 " + smashed + " · 连击 " + st.combo + (st.combo >= 5 ? " 🔥" : "") + " · 最佳 " + st.bestCombo
+      "砸碎 " + smashed + " · 连击 " + st.combo + (st.combo >= 5 ? " 燃" : "") + " · 最佳 " + st.bestCombo
     );
   }
 
@@ -295,7 +295,7 @@
   resize();
   for (let i = 0; i < 6; i++) plates.push(spawnPlate(false));
   plates.push(spawnPlate(true));
-  V.setHud(hud, "砸碎 0 · 瞄准飞盘猛砸");
+  V.setHud(hud, "砸碎 0 · 瞄准飞盘 · 点屏猛砸");
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && !raf) raf = requestAnimationFrame(loop);
   });

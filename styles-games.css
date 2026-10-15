@@ -77,16 +77,17 @@ html, body {
 .game-title-block h1 {
   margin: 0;
   font-family: var(--font-display, serif);
-  font-size: clamp(1.1rem, 4.5vw, 1.4rem);
+  font-size: clamp(1.15rem, 4.8vw, 1.45rem);
   letter-spacing: 0.14em;
-  color: var(--paper, #f4e8d8);
-  text-shadow: 0 0 14px rgba(255, 61, 127, 0.4);
+  color: #f7ecde;
+  text-shadow: 0 0 16px rgba(255, 61, 127, 0.45), 0 1px 0 rgba(0,0,0,0.6);
 }
 
 .game-title-block p {
-  margin: 0.15rem 0 0;
-  font-size: 0.72rem;
-  color: var(--muted, #9a8fb0);
+  margin: 0.18rem 0 0;
+  font-size: clamp(0.7rem, 2.6vw, 0.78rem);
+  color: #b5a8c8;
+  letter-spacing: 0.06em;
 }
 
 
@@ -143,50 +144,64 @@ html, body {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.65rem 0.9rem calc(0.75rem + var(--safe-bottom));
-  border-top: 1px solid rgba(255, 61, 127, 0.22);
-  background: rgba(8, 6, 14, 0.92);
+  gap: 0.35rem;
+  padding: 0.7rem 0.95rem calc(0.85rem + var(--safe-bottom));
+  border-top: 1px solid rgba(255, 61, 127, 0.28);
+  background: linear-gradient(180deg, rgba(14, 10, 22, 0.88), rgba(8, 6, 14, 0.96));
   z-index: 5;
 }
 
 .game-hud-stats {
-  font-size: 0.92rem;
-  color: var(--cyan, #5ce1e6);
-  text-shadow: 0 0 10px rgba(92, 225, 230, 0.25);
+  font-size: clamp(0.95rem, 3.6vw, 1.08rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #8af0f4;
+  text-shadow: 0 0 12px rgba(92, 225, 230, 0.35), 0 1px 0 rgba(0, 0, 0, 0.85);
   font-variant-numeric: tabular-nums;
-  min-height: 1.3em;
-}
-
-.game-hud-tip {
-  font-size: 0.75rem;
-  color: var(--muted, #9a8fb0);
+  min-height: 1.35em;
   line-height: 1.35;
 }
 
-/* floating damage / merit */
+.game-hud-tip {
+  font-size: clamp(0.72rem, 2.8vw, 0.82rem);
+  color: #b5a8c8;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
+/* floating damage / merit — high-contrast on mobile */
 .float-dmg {
   position: absolute;
   pointer-events: none;
   font-family: var(--font-display, serif);
-  font-size: 1.35rem;
+  font-size: clamp(1.25rem, 5vw, 1.55rem);
   font-weight: 700;
   color: #ffe566;
-  text-shadow: 0 0 12px rgba(255, 229, 102, 0.6), 0 2px 0 #000;
+  text-shadow:
+    0 0 14px rgba(255, 229, 102, 0.75),
+    0 1px 0 #000,
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 -1px 0 #000;
   animation: float-up 0.85s ease-out forwards;
   z-index: 20;
   white-space: nowrap;
   transform: translate(-50%, -50%);
+  -webkit-text-stroke: 0.4px rgba(0, 0, 0, 0.55);
 }
 .float-dmg.is-crit {
-  font-size: 1.7rem;
-  color: #ff3d7f;
-  text-shadow: 0 0 18px rgba(255, 61, 127, 0.8), 0 2px 0 #000;
+  font-size: clamp(1.55rem, 6.2vw, 1.95rem);
+  color: #ff5a92;
+  text-shadow:
+    0 0 20px rgba(255, 61, 127, 0.9),
+    0 1px 0 #000,
+    1px 0 0 #000,
+    -1px 0 0 #000;
 }
 .float-dmg.is-calm {
-  color: #5ce1e6;
-  font-size: 1.1rem;
-  text-shadow: 0 0 12px rgba(92, 225, 230, 0.5);
+  color: #7aeff3;
+  font-size: clamp(1.05rem, 4.2vw, 1.25rem);
+  text-shadow: 0 0 14px rgba(92, 225, 230, 0.65), 0 1px 0 #000;
 }
 @keyframes float-up {
   0% { opacity: 1; transform: translate(-50%, -50%) scale(0.85); }
