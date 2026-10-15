@@ -547,8 +547,10 @@
       const rate = 0.82 + i * 0.07 + (Math.random() * 0.08 - 0.04);
       const gain = 0.92 + i * 0.2;
       if (tryPlaySample(ctx, t, "thud", { rate, gain })) {
-        // heavy: layer whoosh for meatier bag punch
-        if (i >= 1.35) tryPlaySample(ctx, t, "whoosh", { rate: 0.95 + Math.random() * 0.15, gain: 0.28 + i * 0.08 });
+        // attack transient + body (thud) + air tail
+        tryPlaySample(ctx, t, "tick", { rate: 1.35 + Math.random() * 0.2, gain: 0.18 + i * 0.06 });
+        if (i >= 0.9) tryPlaySample(ctx, t + 0.012, "whoosh", { rate: 0.92 + Math.random() * 0.18, gain: 0.22 + i * 0.1 });
+        if (i >= 1.6) tryPlaySample(ctx, t, "crack", { rate: 1.4, gain: 0.16 });
         return;
       }
       // synth fallback if sample not decoded yet
@@ -577,7 +579,10 @@
     const loud = loudness == null ? 1 : Math.max(0.5, Math.min(2.5, loudness));
     withAudio((ctx, t) => {
       const rate = Math.max(0.65, Math.min(1.7, p * (0.95 + Math.random() * 0.12)));
-      if (tryPlaySample(ctx, t, "pop", { rate, gain: 0.82 * loud })) return;
+      if (tryPlaySample(ctx, t, "pop", { rate, gain: 0.95 * loud })) {
+        tryPlaySample(ctx, t, "tick", { rate: 1.5 * rate, gain: 0.14 * loud });
+        return;
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
@@ -597,7 +602,11 @@
   function playWhoosh() {
     withAudio((ctx, t) => {
       const rate = 0.9 + Math.random() * 0.2;
-      if (tryPlaySample(ctx, t, "whoosh", { rate, gain: 0.88 })) return;
+      if (tryPlaySample(ctx, t, "whoosh", { rate, gain: 1.05 })) {
+        tryPlaySample(ctx, t, "tick", { rate: 0.75, gain: 0.22 });
+        tryPlaySample(ctx, t + 0.04, "thud", { rate: 0.55, gain: 0.18 });
+        return;
+      }
       const bufferSize = Math.floor(ctx.sampleRate * 0.28);
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -662,7 +671,10 @@
   function playWoodChime() {
     withAudio((ctx, t) => {
       const rate = 0.96 + Math.random() * 0.1;
-      if (tryPlaySample(ctx, t, "wood", { rate, gain: 1.0 })) return;
+      if (tryPlaySample(ctx, t, "wood", { rate, gain: 1.12 })) {
+        tryPlaySample(ctx, t, "tick", { rate: 0.85, gain: 0.2 });
+        return;
+      }
       const freqs = [392, 588, 784];
       const peaks = [0.34, 0.14, 0.07];
       freqs.forEach((f, i) => {
@@ -683,7 +695,10 @@
 
   function playTick() {
     withAudio((ctx, t) => {
-      if (tryPlaySample(ctx, t, "tick", { rate: 0.95 + Math.random() * 0.15, gain: 0.55 })) return;
+      if (tryPlaySample(ctx, t, "tick", { rate: 0.95 + Math.random() * 0.15, gain: 0.85 })) {
+        tryPlaySample(ctx, t, "pop", { rate: 1.6, gain: 0.12 });
+        return;
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "square";

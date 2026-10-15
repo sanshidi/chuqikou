@@ -79,16 +79,19 @@ writeWav(
   })
 );
 
-// Air whoosh / swing
+// Air whoosh / swing — louder attack + body + air tail
 writeWav(
   "whoosh",
-  render(0.28, (t) => {
+  render(0.34, (t) => {
     const n = noise();
-    const sweep = 900 + 2200 * Math.exp(-t * 8) - t * 400;
-    // crude band-ish by mixing HP-ish noise with sine carrier
-    const band = n * (0.55 + 0.45 * Math.sin(2 * Math.PI * sweep * t * 0.002));
-    const env = Math.sin(Math.PI * clamp(t / 0.22, 0, 1)) * envExp(t, 3.2);
-    return band * env * 0.75 + noise() * envExp(t, 14) * 0.12;
+    const sweep = 1200 + 2800 * Math.exp(-t * 7) - t * 500;
+    const band = n * (0.6 + 0.4 * Math.sin(2 * Math.PI * sweep * t * 0.002));
+    const env = Math.sin(Math.PI * clamp(t / 0.26, 0, 1)) * envExp(t, 2.6);
+    const attack = noise() * envExp(t, 55) * 0.55 + sine(1800, t) * envExp(t, 70) * 0.12;
+    const body = band * env * 0.95;
+    const tail = noise() * envExp(Math.max(0, t - 0.06), 8) * 0.28 * (t > 0.05 ? 1 : 0);
+    const rumble = sine(90 + t * 40, t) * envExp(t, 10) * 0.18;
+    return attack + body + tail + rumble;
   })
 );
 
@@ -132,11 +135,14 @@ writeWav(
   })
 );
 
-// Soft UI tick
+// Crisp UI tick — attack click + short body
 writeWav(
   "tick",
-  render(0.05, (t) => {
-    return sine(1100, t) * envExp(t, 55) * 0.55 + noise() * envExp(t, 80) * 0.12;
+  render(0.07, (t) => {
+    const click = noise() * envExp(t, 120) * 0.55;
+    const body = sine(1400, t) * envExp(t, 48) * 0.7 + sine(2200, t) * envExp(t, 70) * 0.22;
+    const shell = sine(880, t) * envExp(t, 35) * 0.18;
+    return click + body + shell;
   })
 );
 

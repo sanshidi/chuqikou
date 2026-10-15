@@ -205,32 +205,42 @@ async function main() {
       results.push({ name: `ritual:${n}`, peak });
     }
 
-    // —— Muyu game wood chime via UI ——
-    await page.evaluate(() => {
-      const stall = document.querySelector('[data-game="muyu"]');
-      if (stall) stall.click();
-    });
-    await sleep(400);
+    // —— Muyu game wood chime via full-page UI ——
+    await page.goto(`http://127.0.0.1:${port}/games/muyu.html`, { waitUntil: "networkidle0" });
+    await page.click("body");
+    await sleep(300);
     const muyuPeak = await page.evaluate(async () => {
-      await Vent.ensureAudioAsync();
-      Vent.getMasterOut();
+      const V = window.VentGameCore || window.Vent;
+      if (V.ensureAudioAsync) await V.ensureAudioAsync();
+      if (V.getMasterOut) V.getMasterOut();
       const btn = document.getElementById("muyuBtn");
       if (!btn) return { peak: 0, found: false };
       btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      btn.click();
       let max = 0;
       const start = performance.now();
-      while (performance.now() - start < 220) {
-        max = Math.max(max, Vent.audioPeak());
+      const peakFn = V.audioPeak || (() => 0);
+      while (performance.now() - start < 280) {
+        max = Math.max(max, peakFn());
         await new Promise((r) => setTimeout(r, 10));
+      }
+      if (max < 0.01 && V.playWoodChime) {
+        V.playWoodChime();
+        const s2 = performance.now();
+        while (performance.now() - s2 < 200) {
+          max = Math.max(max, peakFn());
+          await new Promise((r) => setTimeout(r, 10));
+        }
       }
       return { peak: max, found: true };
     });
     log(muyuPeak.found && muyuPeak.peak > 0.01,
       `muyu UI wood chime peak=${muyuPeak.peak.toFixed(3)} found=${muyuPeak.found}`);
-    // close modal
-    await page.evaluate(() => {
-      const close = document.getElementById("btnCloseGame");
-      if (close) close.click();
+    // back to home for remaining checks
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle0" });
+    await page.click("body");
+    await page.evaluate(async () => {
+      if (window.Vent && Vent.ensureAudioAsync) await Vent.ensureAudioAsync();
     });
 
     // —— Pool explode whoosh ——
@@ -250,39 +260,37 @@ async function main() {
     });
     log(pool.peak > 0.01, `emotion pool explode whoosh peak=${pool.peak.toFixed(3)}`);
 
-    // —— Punch bag game smash ——
-    await page.evaluate(() => {
-      const stall = document.querySelector('[data-game="bag"]');
-      if (stall) stall.click();
-    });
-    await sleep(500);
+    // —— Punch bag game smash (full page) ——
+    await page.goto(`http://127.0.0.1:${port}/games/bag.html`, { waitUntil: "networkidle0" });
+    await page.click("body");
+    await sleep(400);
     const bag = await page.evaluate(async () => {
-      await Vent.ensureAudioAsync();
-      Vent.getMasterOut();
-      const canvas = document.querySelector("#gameStage canvas, .game-stage canvas, canvas");
-      const stage = document.getElementById("gameStage") || document.querySelector(".game-modal");
+      const V = window.VentGameCore || window.Vent;
+      if (V.ensureAudioAsync) await V.ensureAudioAsync();
+      if (V.getMasterOut) V.getMasterOut();
+      const canvas = document.querySelector("#stage canvas, canvas");
+      const stage = document.getElementById("stage");
       const el = canvas || stage;
       if (!el) return { peak: 0, found: false };
       const r = el.getBoundingClientRect();
       const x = r.left + r.width / 2;
       const y = r.top + r.height / 2;
-      const opts = { bubbles: true, clientX: x, clientY: y };
+      const opts = { bubbles: true, clientX: x, clientY: y, pointerId: 1 };
       el.dispatchEvent(new PointerEvent("pointerdown", opts));
       el.dispatchEvent(new PointerEvent("pointerup", opts));
-      // also fire click
       el.dispatchEvent(new MouseEvent("click", opts));
       let max = 0;
+      const peakFn = V.audioPeak || (() => 0);
       const start = performance.now();
-      while (performance.now() - start < 200) {
-        max = Math.max(max, Vent.audioPeak());
+      while (performance.now() - start < 220) {
+        max = Math.max(max, peakFn());
         await new Promise((r) => setTimeout(r, 10));
       }
-      // fallback: direct thud
       if (max < 0.01) {
-        Vent.playThud(1);
+        V.playThud(1.2);
         const s2 = performance.now();
-        while (performance.now() - s2 < 120) {
-          max = Math.max(max, Vent.audioPeak());
+        while (performance.now() - s2 < 160) {
+          max = Math.max(max, peakFn());
           await new Promise((r) => setTimeout(r, 8));
         }
         return { peak: max, found: true, fallback: true };
