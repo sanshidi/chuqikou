@@ -1,5 +1,5 @@
 /* 出气口 — offline cache, local-only app shell */
-const CACHE = 'chuqikou-v18';
+const CACHE = 'chuqikou-v19';
 const ASSETS = [
   './',
   './index.html',
@@ -44,7 +44,12 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -61,7 +66,25 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // JS/CSS/HTML: network-first so Pages deploys are not stuck on old SW cache
+  // Navigations: network-first, fall back to cached shell
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(req).then((cached) => cached || caches.match('./index.html') || caches.match('./'))
+        )
+    );
+    return;
+  }
+
+  // JS/CSS/HTML/audio/manifest: network-first so Pages deploys are not stuck
   const netFirst = /\.(js|css|html|webmanifest|wav|mp3|ogg)$/.test(url.pathname) || url.pathname.endsWith('/') || url.pathname.includes('/audio/');
   if (netFirst) {
     e.respondWith(

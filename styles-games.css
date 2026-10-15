@@ -1091,3 +1091,46 @@ html.is-hitstop .game-stage-full.is-shake-mega {
   0%, 100% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 12px rgba(92, 225, 230, 0.15); }
   50% { box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 22px rgba(255, 61, 127, 0.35); }
 }
+
+
+/* a11y touch targets (r9) — keep pinch-zoom blocked, enlarge hit areas */
+.game-back,
+.mute-btn,
+.test-sfx-btn,
+.muyu-btn-xl,
+.rip-chip,
+.squeeze-swatch {
+  min-height: 44px;
+  min-width: 44px;
+}
+.mute-btn,
+.test-sfx-btn {
+  padding: 0.55rem 0.7rem;
+}
+.game-hud-stats {
+  /* prevent accidental selection of live HUD */
+  user-select: none;
+}
+@media (max-width: 360px) {
+  .game-topbar {
+    gap: 0.35rem;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+  .game-title-block h1 {
+    letter-spacing: 0.08em;
+  }
+  .game-audio-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+/* Focus rings for keyboard / switch users */
+.game-back:focus-visible,
+.mute-btn:focus-visible,
+.test-sfx-btn:focus-visible,
+.muyu-btn-xl:focus-visible,
+.rip-chip:focus-visible {
+  outline: 2px solid #5ce1e6;
+  outline-offset: 3px;
+}

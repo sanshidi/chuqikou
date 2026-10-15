@@ -2344,16 +2344,15 @@ a.stall {
 .companion-status[data-kind="warn"],
 .companion-status[data-kind="crisis"] { color: var(--magenta); }
 .companion-hotlines {
-  margin-top: 0.75rem;
+  margin: 0.75rem 0 0;
   padding: 0.55rem 0.7rem;
   border: 1px solid rgba(255, 229, 102, 0.35);
   background: rgba(255, 229, 102, 0.06);
   font-size: 0.82rem;
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
-  color: var(--muted);
+  color: #d8c98a;
+  line-height: 1.45;
 }
-.companion-hotlines a { color: var(--cyan); }
+.companion-hotlines a { color: var(--cyan); font-weight: 600; }
 
 @media (max-width: 420px) {
   .companion-compose {
@@ -2362,4 +2361,110 @@ a.stall {
   .companion-compose .neon-btn {
     width: 100%;
   }
+}
+
+
+/* —— boot / SW status —— */
+.boot-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: #0c0a12;
+  color: #5ce1e6;
+  font-family: var(--font-display, serif);
+  letter-spacing: 0.2em;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+.boot-veil span { font-size: 1.4rem; }
+.boot-veil small {
+  font-family: var(--font-body, system-ui, sans-serif);
+  letter-spacing: 0.08em;
+  color: #9a8fb0;
+  font-size: 0.78rem;
+}
+.boot-veil.is-done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.sw-status {
+  position: fixed;
+  left: 50%;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(92vw, 360px);
+  margin: 0;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.78rem;
+  text-align: center;
+  color: #0c0a12;
+  background: #5ce1e6;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.sw-status[data-kind="offline"],
+.sw-status[data-kind="warn"] { background: #ffe566; }
+.sw-status[data-kind="update"] { background: #ff3d7f; color: #fff; }
+.sw-status[hidden] { display: none !important; }
+
+
+/* a11y touch r9 */
+.chip,
+.prompt-chip,
+.neon-btn,
+.ghost-btn,
+.stall {
+  min-height: 44px;
+}
+.prompt-chip,
+.chip {
+  padding: 0.55rem 0.85rem;
+}
+.companion-compose .neon-btn {
+  min-width: 88px;
+}
+:focus-visible {
+  outline: 2px solid #5ce1e6;
+  outline-offset: 2px;
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+@media (max-width: 360px) {
+  .companion-log {
+    max-height: min(48vh, 300px);
+  }
+  .companion-hotline-banner {
+    font-size: 0.78rem;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 10000;
+  padding: 0.55rem 0.85rem;
+  background: #5ce1e6;
+  color: #0c0a12;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 0 0 8px 8px;
+}
+.skip-link:focus {
+  top: 0;
 }

@@ -725,11 +725,50 @@
     }
   }
 
-  /* —— PWA —— */
+  /* —— PWA / offline shell —— */
+  function setSwStatus(text, kind) {
+    const el = document.getElementById("swStatus");
+    if (!el) return;
+    el.hidden = !text;
+    el.textContent = text || "";
+    el.dataset.kind = kind || "";
+  }
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
+      navigator.serviceWorker
+        .register("./sw.js")
+        .then((reg) => {
+          if (reg.waiting) setSwStatus("有新版本可刷新（离线缓存已更新）", "update");
+          reg.addEventListener("updatefound", () => {
+            const nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener("statechange", () => {
+              if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                setSwStatus("新版本已就绪 · 刷新页面即可用上", "update");
+              } else if (nw.state === "activated") {
+                setSwStatus("离线壳已就绪 · 弱网也能打开", "ok");
+                setTimeout(() => setSwStatus("", ""), 4200);
+              }
+            });
+          });
+          setSwStatus(navigator.onLine ? "" : "离线模式 · 正在用本地缓存", navigator.onLine ? "" : "offline");
+        })
+        .catch(() => setSwStatus("离线缓存未启用（不影响本页使用）", "warn"));
+      window.addEventListener("online", () => setSwStatus("网络已恢复", "ok"));
+      window.addEventListener("offline", () => setSwStatus("离线模式 · 正在用本地缓存", "offline"));
     });
+  }
+  // First-paint loading veil
+  const boot = document.getElementById("bootVeil");
+  if (boot) {
+    const hide = () => {
+      boot.classList.add("is-done");
+      setTimeout(() => {
+        try { boot.remove(); } catch (_) {}
+      }, 380);
+    };
+    if (document.readyState === "complete") hide();
+    else window.addEventListener("load", hide);
   }
 
   syncDestroyButtons();

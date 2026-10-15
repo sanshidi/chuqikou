@@ -1,15 +1,21 @@
 {
+  "id": "./",
   "name": "出气口",
   "short_name": "出气口",
-  "description": "雨夜巷口的本地情绪发泄站。写完就散、情绪池、小游戏。不上云。",
-  "start_url": "./",
+  "description": "雨夜巷口的本地情绪发泄站。写完就散、树洞倾听、情绪池、小游戏。不上云、无账号。",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0c0a12",
   "theme_color": "#0c0a12",
   "lang": "zh-Hans",
+  "dir": "ltr",
+  "categories": ["lifestyle", "health", "games"],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
